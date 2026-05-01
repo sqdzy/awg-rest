@@ -22,6 +22,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - name: actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: vet
         run: go vet ./...
       - name: build
@@ -60,23 +62,6 @@ jobs:
           cache: true
       - name: e2e tests
         run: go test -timeout=300s -tags=e2e ./test/e2e/...
-
-  # Real-AWG E2E job runs on a self-hosted Linux runner that has
-  # amneziawg-tools + the kernel module (or DKMS) available. Disabled by
-  # default; enable by adding a 'real-awg' label to a self-hosted runner.
-  e2e-real-awg:
-    name: e2e (real AmneziaWG)
-    runs-on: [self-hosted, linux, real-awg]
-    if: false
-    needs: [e2e]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-      - name: e2e (real-awg)
-        run: sudo -E env "PATH=$PATH" go test -timeout=600s -tags="e2e linux_awg" ./test/e2e/...
 
   docker-build:
     name: docker images
