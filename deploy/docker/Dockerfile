@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- builder -----------------------------------------------------------------
-FROM golang:1.25.9-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 WORKDIR /src
 
 # Cache module downloads.
