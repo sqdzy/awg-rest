@@ -21,7 +21,7 @@ RUN go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/awg-a
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/awg-node-agent ./cmd/awg-node-agent
 
 # ---- amneziawg-tools --------------------------------------------------------
-FROM alpine:3.20 AS awg-tools-builder
+FROM alpine:3.23 AS awg-tools-builder
 ARG AMNEZIAWG_TOOLS_TAG=v1.0.20260223
 ARG AMNEZIAWG_TOOLS_COMMIT=5d6179a6d0842e98dfb349c28cf1bd8e4b9d1079
 RUN apk add --no-cache build-base git linux-headers
@@ -51,7 +51,7 @@ ENTRYPOINT ["/awg-worker"]
 # The node-agent ships in an image that already contains amneziawg-tools so the
 # CLIExecutor on Linux works out of the box. NOTE: the kernel module
 # `amneziawg` MUST be present on the *host* — it is not provided by this image.
-FROM alpine:3.20 AS awg-node-agent
+FROM alpine:3.23 AS awg-node-agent
 RUN apk add --no-cache bash iproute2 iptables nftables openresolv ca-certificates
 COPY --from=awg-tools-builder /out/awg /usr/local/bin/awg
 COPY --from=awg-tools-builder /out/awg-quick /usr/local/bin/awg-quick
