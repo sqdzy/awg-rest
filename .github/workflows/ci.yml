@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GO_VERSION: "1.25.9"
+  TESTCONTAINERS_RYUK_DISABLED: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-unit:
+    name: lint + unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: vet
+        run: go vet ./...
+      - name: build
+        run: go build ./...
+      - name: unit tests
+        run: go test -timeout=120s -count=1 ./...
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          repo-checkout: false
+          go-version-input: ${{ env.GO_VERSION }}
+          go-package: ./...
+
+  integration:
+    name: integration (Postgres via testcontainers)
+    runs-on: ubuntu-latest
+    needs: [lint-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: integration tests
+        run: go test -timeout=300s -tags=integration ./test/integration/...
+
+  e2e:
+    name: e2e (fake AWG)
+    runs-on: ubuntu-latest
+    needs: [lint-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: e2e tests
+        run: go test -timeout=300s -tags=e2e ./test/e2e/...
+
+  # Real-AWG E2E job runs on a self-hosted Linux runner that has
+  # amneziawg-tools + the kernel module (or DKMS) available. Disabled by
+  # default; enable by adding a 'real-awg' label to a self-hosted runner.
+  e2e-real-awg:
+    name: e2e (real AmneziaWG)
+    runs-on: [self-hosted, linux, real-awg]
+    if: false
+    needs: [e2e]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: e2e (real-awg)
+        run: sudo -E env "PATH=$PATH" go test -timeout=600s -tags="e2e linux_awg" ./test/e2e/...
+
+  docker-build:
+    name: docker images
+    runs-on: ubuntu-latest
+    needs: [lint-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: build api
+        run: docker build -f deploy/docker/Dockerfile --target awg-api -t awg-api:ci .
+      - name: build worker
+        run: docker build -f deploy/docker/Dockerfile --target awg-worker -t awg-worker:ci .
+      - name: build node-agent
+        run: docker build -f deploy/docker/Dockerfile --target awg-node-agent -t awg-node-agent:ci .

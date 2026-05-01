@@ -1,0 +1,260 @@
+openapi: 3.1.0
+info:
+  title: awg-rest control plane API
+  version: 1.0.0
+  description: |
+    REST API for the AmneziaWG V2 control plane (`awg-rest`): durable desired
+    state in Postgres, idempotent writes via `Idempotency-Key`, and
+    asynchronous apply via the outbox/reconciler. Errors are returned as
+    `application/problem+json` (RFC 9457).
+
+servers:
+  - url: http://awg-api:18080
+    description: production internal Docker network
+  - url: http://127.0.0.1:18080
+    description: local loopback development
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health/live:
+    get:
+      summary: Liveness probe
+      security: []
+      responses:
+        "200": { description: alive }
+  /health/ready:
+    get:
+      summary: Readiness probe
+      security: []
+      responses:
+        "200": { description: ready }
+        "503": { description: not ready }
+
+  /v1/operations/{id}:
+    get:
+      summary: Get the status of an asynchronous operation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: operation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Operation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenants/{tenant}/peers:
+    post:
+      summary: Create a peer (idempotent)
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePeerRequest" }
+      responses:
+        "202":
+          description: Accepted; an outbox job has been enqueued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatePeerResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Validation" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tenants/{tenant}/peers/{peerID}:
+    get:
+      summary: Get a peer
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - $ref: "#/components/parameters/PeerID"
+      responses:
+        "200":
+          description: peer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Peer" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenants/{tenant}/peers/{peerID}:revoke:
+    post:
+      summary: Revoke a peer (idempotent)
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - $ref: "#/components/parameters/PeerID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id: { type: string, format: uuid }
+                  status: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /v1/tenants/{tenant}/peers/{peerID}/configuration:
+    get:
+      summary: Render the AmneziaWG client configuration
+      description: |
+        Returns a `text/plain` config consumable by the AmneziaWG client. It
+        does not accept or return client private keys; the one-time private key
+        is returned only by the create-peer response when the server generated
+        it.
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - $ref: "#/components/parameters/PeerID"
+      responses:
+        "200":
+          description: client config
+          content:
+            text/plain: {}
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantSlug:
+      in: path
+      name: tenant
+      required: true
+      schema: { type: string }
+    PeerID:
+      in: path
+      name: peerID
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+
+  responses:
+    BadRequest:    { description: invalid request,    content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    Unauthorized:  { description: unauthorized,        content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    Forbidden:     { description: forbidden,           content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    NotFound:      { description: not found,           content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    Conflict:      { description: conflict,            content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    Validation:    { description: validation error,    content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    RateLimited:
+      description: rate limited
+      headers:
+        Retry-After:
+          schema: { type: integer, format: int32 }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type:    { type: string }
+        title:   { type: string }
+        status:  { type: integer }
+        detail:  { type: string }
+        code:    { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:   { type: string }
+              code:    { type: string }
+              message: { type: string }
+
+    CreatePeerRequest:
+      type: object
+      required: [external_id]
+      properties:
+        external_id:  { type: string, description: client-supplied stable ID }
+        display_name: { type: string }
+        node_id:      { type: string, format: uuid }
+        profile_id:   { type: string, format: uuid }
+        profile_name: { type: string }
+        public_key:   { type: string, description: optional client-supplied public key (44-char base64) }
+        expires_at:   { type: string, format: date-time }
+
+    CreatePeerResponse:
+      type: object
+      required: [operation_id, peer_id, status, allowed_ip, public_key, node_id, profile_id]
+      properties:
+        operation_id:  { type: string, format: uuid }
+        peer_id:       { type: string, format: uuid }
+        status:        { type: string }
+        allowed_ip:    { type: string }
+        public_key:    { type: string }
+        private_key:   { type: string, description: present only on first response when the server generated the key }
+        preshared_key: { type: string }
+        node_id:       { type: string, format: uuid }
+        profile_id:    { type: string, format: uuid }
+
+    Peer:
+      type: object
+      properties:
+        id:                { type: string, format: uuid }
+        tenant_id:         { type: string, format: uuid }
+        node_id:           { type: string, format: uuid }
+        profile_id:        { type: string, format: uuid }
+        external_id:       { type: string }
+        display_name:      { type: string }
+        public_key:        { type: string }
+        allowed_ip:        { type: string }
+        state:             { type: string, enum: [pending, active, revoked, expired, rotating] }
+        desired_revision:  { type: integer }
+        applied_revision:  { type: integer }
+        expires_at:        { type: string, format: date-time }
+        revoked_at:        { type: string, format: date-time }
+        created_at:        { type: string, format: date-time }
+        updated_at:        { type: string, format: date-time }
+
+    Operation:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        tenant_id:    { type: string, format: uuid }
+        peer_id:      { type: string, format: uuid }
+        node_id:      { type: string, format: uuid }
+        kind:         { type: string }
+        status:       { type: string, enum: [pending, running, applied, failed_terminal, failed_retryable] }
+        error_code:   { type: string }
+        error_message: { type: string }
+        started_at:   { type: string, format: date-time }
+        finished_at:  { type: string, format: date-time }

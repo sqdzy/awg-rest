@@ -1,0 +1,12 @@
+.git
+.github
+.omx
+test
+**/*_test.go
+deploy/compose
+README.md
+AGENTS.md
+llms.txt
+*.exe
+.idea
+.vscode

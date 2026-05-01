@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS usage_rollups;
+DROP TABLE IF EXISTS config_snapshots;
+DROP TABLE IF EXISTS audit_events;
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS idempotency_keys;
+DROP TABLE IF EXISTS operations;
+DROP TABLE IF EXISTS peer_runtime;
+DROP TABLE IF EXISTS peers;
+DROP TABLE IF EXISTS address_pools;
+DROP TABLE IF EXISTS protocol_profiles;
+DROP TABLE IF EXISTS vpn_nodes;
+DROP TABLE IF EXISTS role_bindings;
+DROP TABLE IF EXISTS subjects;
+DROP TABLE IF EXISTS tenants;

@@ -1,0 +1,29 @@
+# awg-rest
+
+> Production-oriented AmneziaWG 2.0 REST control plane with Postgres desired
+> state, durable outbox apply, node-local agent, JWT/RBAC, and mTLS.
+
+## Primary docs
+
+- README.md: project overview, local run, production compose model, release notes.
+- api/openapi.yaml: HTTP API contract for backend containers.
+- AGENTS.md: repository-specific guidance for coding agents.
+
+## Important code paths
+
+- internal/api/: HTTP handlers, service layer, tenant authorization, idempotency.
+- internal/domain/profile.go: AmneziaWG profile model and official AWG2 limits.
+- internal/outbox/worker.go: durable outbox worker and reconciler.
+- internal/nodeagent/: node-local HTTP/mTLS agent and remote executor client.
+- internal/awg/: real `awg` CLI executor, fake executor, and dump parser.
+- internal/render/: AmneziaWG server/client config rendering.
+- deploy/compose/: local and production Docker Compose skeletons.
+- deploy/docker/Dockerfile: multi-target Docker image build.
+
+## Security summary
+
+- Production API is intended for same-host/same-network backend containers, not public internet.
+- Production worker to node-agent transport is HTTPS with mutual TLS.
+- Client private keys are one-time response material only and are not returned on idempotency replay.
+- Node-agent diagnostic endpoints redact private and preshared keys.
+- Tenant isolation is enforced in the service layer for reads and writes.

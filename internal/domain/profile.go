@@ -1,0 +1,238 @@
+package domain
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// ProtocolVersion identifies the AmneziaWG protocol generation. V2 introduces
+// S3, S4 and ranges for H1-H4. Legacy V1 profiles MUST NOT be upgraded in
+// place; a parallel profile rollout is required.
+type ProtocolVersion string
+
+const (
+	ProtocolV1 ProtocolVersion = "v1"
+	ProtocolV2 ProtocolVersion = "v2"
+)
+
+// IntRange represents an inclusive [Min, Max] range used for AmneziaWG V2
+// header obfuscation parameters H1-H4. When Min == Max the range degenerates
+// to a single value.
+type IntRange struct {
+	Min int64 `json:"min"`
+	Max int64 `json:"max"`
+}
+
+// ParseIntRange accepts either "1234" or "1234-5678".
+func ParseIntRange(s string) (IntRange, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return IntRange{}, fmt.Errorf("empty range")
+	}
+	if i := strings.IndexByte(s, '-'); i > 0 {
+		lo, err := strconv.ParseInt(strings.TrimSpace(s[:i]), 10, 64)
+		if err != nil {
+			return IntRange{}, fmt.Errorf("invalid lower bound %q: %w", s[:i], err)
+		}
+		hi, err := strconv.ParseInt(strings.TrimSpace(s[i+1:]), 10, 64)
+		if err != nil {
+			return IntRange{}, fmt.Errorf("invalid upper bound %q: %w", s[i+1:], err)
+		}
+		if lo > hi {
+			return IntRange{}, fmt.Errorf("range lower bound %d > upper bound %d", lo, hi)
+		}
+		return IntRange{Min: lo, Max: hi}, nil
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return IntRange{}, fmt.Errorf("invalid integer %q: %w", s, err)
+	}
+	return IntRange{Min: v, Max: v}, nil
+}
+
+// String renders the range back to AmneziaWG-compatible format.
+func (r IntRange) String() string {
+	if r.Min == r.Max {
+		return strconv.FormatInt(r.Min, 10)
+	}
+	return strconv.FormatInt(r.Min, 10) + "-" + strconv.FormatInt(r.Max, 10)
+}
+
+// ProtocolProfile is the AmneziaWG-specific tunable set. It is *versioned* —
+// changing parameters MUST allocate a new profile and re-issue client configs.
+//
+// Constraints from official AmneziaWG 2.0 configuration docs:
+//   - All parameters except Jc, Jmin, Jmax MUST be identical between server and client.
+//   - Jc      in [0, 10]                  (junk packet count)
+//   - Jmin    in [64, Jmax], Jmax in [Jmin, 1024]
+//   - S1, S2  in [0, 64]                  (init/response packet padding)
+//   - S3      in [0, 64] (V2 only)
+//   - S4      in [0, 32] (V2 only)
+//   - H1..H4  any 32-bit value or range; pairwise distinct so that the
+//     classifier in the kernel module can disambiguate packet types.
+//   - I1..I5  optional V2 CPS packet strings, limited by upstream tools to <5 KiB.
+//
+// ListenPortPolicy "fixed" pins ListenPort; "managed" lets the operator force
+// a UDP port ≤ 9999 to avoid ISP filtering of high UDP ports (per official
+// AmneziaWG self-hosted recommendation).
+type ProtocolProfile struct {
+	ID              uuid.UUID       `json:"id"`
+	Name            string          `json:"name"`
+	ProtocolVersion ProtocolVersion `json:"protocol_version"`
+
+	// Junk-packet randomization (client-only, server ignores).
+	Jc   int `json:"jc"`
+	Jmin int `json:"jmin"`
+	Jmax int `json:"jmax"`
+
+	// Padding sizes for init/response packets (V1+V2).
+	S1 int `json:"s1"`
+	S2 int `json:"s2"`
+	// V2 only.
+	S3 int `json:"s3"`
+	S4 int `json:"s4"`
+
+	// Header magic ranges (V2 supports ranges; V1 uses single uint32 values).
+	H1 IntRange `json:"h1"`
+	H2 IntRange `json:"h2"`
+	H3 IntRange `json:"h3"`
+	H4 IntRange `json:"h4"`
+
+	// V2-only special-junk CPS packet strings rendered directly into configs.
+	I1 string `json:"i1,omitempty"`
+	I2 string `json:"i2,omitempty"`
+	I3 string `json:"i3,omitempty"`
+	I4 string `json:"i4,omitempty"`
+	I5 string `json:"i5,omitempty"`
+
+	ListenPortPolicy string `json:"listen_port_policy"` // "fixed" | "managed"
+
+	CreatedAt time.Time `json:"created_at"`
+}
+
+const (
+	// AWGStringMax follows amneziawg-tools MAX_AWG_STRING_LEN (<5 KiB).
+	AWGStringMax = 5*1024 - 1
+	JcMax        = 10
+	JunkSizeMin  = 64
+	JunkSizeMax  = 1024
+	S123Max      = 64
+	S4Max        = 32
+)
+
+// Validate enforces all rules from the AmneziaWG protocol matrix. Returns
+// ValidationErrors so the API can surface field-level details.
+func (p ProtocolProfile) Validate() error {
+	var errs ValidationErrors
+
+	if strings.TrimSpace(p.Name) == "" {
+		errs = append(errs, ValidationError{Field: "name", Code: "required", Message: "name is required"})
+	}
+
+	switch p.ProtocolVersion {
+	case ProtocolV1, ProtocolV2:
+	default:
+		errs = append(errs, ValidationError{Field: "protocol_version", Code: "unsupported", Message: "must be 'v1' or 'v2'"})
+		return errs // further checks would be meaningless
+	}
+
+	checkInt := func(field string, v, lo, hi int) {
+		if v < lo || v > hi {
+			errs = append(errs, ValidationError{
+				Field: field, Code: "out_of_range",
+				Message: fmt.Sprintf("must be in [%d, %d], got %d", lo, hi, v),
+			})
+		}
+	}
+
+	checkInt("jc", p.Jc, 0, JcMax)
+	if p.Jmin == 0 && p.Jmax == 0 {
+		if p.Jc > 0 {
+			errs = append(errs, ValidationError{Field: "jmin", Code: "required", Message: "jmin/jmax are required when jc > 0"})
+		}
+	} else {
+		checkInt("jmin", p.Jmin, JunkSizeMin, JunkSizeMax)
+		checkInt("jmax", p.Jmax, JunkSizeMin, JunkSizeMax)
+	}
+	if p.Jmin > p.Jmax {
+		errs = append(errs, ValidationError{Field: "jmin", Code: "invalid", Message: "jmin must be <= jmax"})
+	}
+
+	checkInt("s1", p.S1, 0, S123Max)
+	checkInt("s2", p.S2, 0, S123Max)
+
+	if p.ProtocolVersion == ProtocolV2 {
+		checkInt("s3", p.S3, 0, S123Max)
+		checkInt("s4", p.S4, 0, S4Max)
+		for _, ij := range []struct {
+			name string
+			v    string
+		}{{"i1", p.I1}, {"i2", p.I2}, {"i3", p.I3}, {"i4", p.I4}, {"i5", p.I5}} {
+			if len(ij.v) > AWGStringMax {
+				errs = append(errs, ValidationError{Field: ij.name, Code: "too_long",
+					Message: fmt.Sprintf("must be at most %d bytes, got %d", AWGStringMax, len(ij.v))})
+			}
+		}
+	} else {
+		// V1 must NOT carry V2-only fields.
+		if p.S3 != 0 || p.S4 != 0 {
+			errs = append(errs, ValidationError{Field: "s3", Code: "unsupported", Message: "S3/S4 are V2-only"})
+		}
+		if p.I1 != "" || p.I2 != "" || p.I3 != "" || p.I4 != "" || p.I5 != "" {
+			errs = append(errs, ValidationError{Field: "i1", Code: "unsupported", Message: "I1-I5 are V2-only"})
+		}
+	}
+
+	// H ranges must be ordered; for V1 they MUST collapse to single values.
+	hs := []struct {
+		name string
+		r    IntRange
+	}{{"h1", p.H1}, {"h2", p.H2}, {"h3", p.H3}, {"h4", p.H4}}
+	for _, h := range hs {
+		if h.r.Min < 0 || h.r.Max < 0 || h.r.Max > 0xFFFFFFFF {
+			errs = append(errs, ValidationError{Field: h.name, Code: "out_of_range",
+				Message: "H values must fit in uint32"})
+		}
+		if h.r.Min > h.r.Max {
+			errs = append(errs, ValidationError{Field: h.name, Code: "invalid", Message: "min > max"})
+		}
+		if p.ProtocolVersion == ProtocolV1 && h.r.Min != h.r.Max {
+			errs = append(errs, ValidationError{Field: h.name, Code: "unsupported",
+				Message: "H ranges are V2-only; V1 requires single values"})
+		}
+	}
+
+	// Header magic values MUST be pairwise disjoint so the kernel-module
+	// dispatcher can classify packets unambiguously.
+	if rangesOverlap(p.H1, p.H2) || rangesOverlap(p.H1, p.H3) || rangesOverlap(p.H1, p.H4) ||
+		rangesOverlap(p.H2, p.H3) || rangesOverlap(p.H2, p.H4) || rangesOverlap(p.H3, p.H4) {
+		errs = append(errs, ValidationError{
+			Field: "h1", Code: "overlap",
+			Message: "H1, H2, H3, H4 must be pairwise disjoint",
+		})
+	}
+
+	switch p.ListenPortPolicy {
+	case "", "fixed", "managed":
+	default:
+		errs = append(errs, ValidationError{Field: "listen_port_policy", Code: "unsupported",
+			Message: "must be 'fixed' or 'managed'"})
+	}
+
+	if errs.Empty() {
+		return nil
+	}
+	return errs
+}
+
+// rangesOverlap reports whether two inclusive ranges share any value.
+func rangesOverlap(a, b IntRange) bool {
+	return a.Min <= b.Max && b.Min <= a.Max
+}
+
+// IsV2 returns true if the profile uses any V2-only feature.
+func (p ProtocolProfile) IsV2() bool { return p.ProtocolVersion == ProtocolV2 }
