@@ -80,9 +80,11 @@ jobs:
             stable="false"
           fi
 
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "push=$push_images" >> "$GITHUB_OUTPUT"
-          echo "stable=$stable" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "push=$push_images"
+            echo "stable=$stable"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
