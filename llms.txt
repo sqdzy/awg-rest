@@ -1,29 +1,68 @@
 # awg-rest
 
-> Production-oriented AmneziaWG 2.0 REST control plane with Postgres desired
-> state, durable outbox apply, node-local agent, JWT/RBAC, and mTLS.
+> Internal AmneziaWG V2 REST control plane for backend containers. Go API,
+> Postgres desired state, durable outbox worker, node-local agent, JWT/RBAC,
+> mTLS, OpenAPI, Docker, and GHCR-ready image targets.
 
-## Primary docs
+## Canonical Purpose
 
-- README.md: project overview, local run, production compose model, release notes.
-- api/openapi.yaml: HTTP API contract for backend containers.
-- AGENTS.md: repository-specific guidance for coding agents.
+`awg-rest` lets an application backend provision and revoke AmneziaWG VPN peers
+through a private REST API. It is designed for same-host or internal-network
+backend integration, not for public internet exposure.
 
-## Important code paths
+## Find This Project When Searching For
 
-- internal/api/: HTTP handlers, service layer, tenant authorization, idempotency.
-- internal/domain/profile.go: AmneziaWG profile model and official AWG2 limits.
-- internal/outbox/worker.go: durable outbox worker and reconciler.
-- internal/nodeagent/: node-local HTTP/mTLS agent and remote executor client.
-- internal/awg/: real `awg` CLI executor, fake executor, and dump parser.
-- internal/render/: AmneziaWG server/client config rendering.
-- deploy/compose/: local and production Docker Compose skeletons.
-- deploy/docker/Dockerfile: multi-target Docker image build.
+AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG control plane, VPN peer
+management API, WireGuard REST API, Go VPN backend, Docker AmneziaWG API,
+multi-tenant VPN provisioning, idempotent peer creation, Postgres VPN desired
+state, AmneziaWG automation, awg-api, awg-worker, awg-node-agent.
 
-## Security summary
+## Primary Docs
 
-- Production API is intended for same-host/same-network backend containers, not public internet.
-- Production worker to node-agent transport is HTTPS with mutual TLS.
-- Client private keys are one-time response material only and are not returned on idempotency replay.
-- Node-agent diagnostic endpoints redact private and preshared keys.
-- Tenant isolation is enforced in the service layer for reads and writes.
+- `README.md`: project overview, local run, production compose model, release
+  notes.
+- `AGENTS.md`: public AI discovery guide and repository usage summary.
+- `api/openapi.yaml`: HTTP API contract for backend containers.
+- `.env.example`: non-secret configuration template.
+
+## Typical Integration
+
+1. Run `awg-api`, `postgres`, `awg-worker`, and `awg-node-agent` on an internal
+   Docker network.
+2. Attach the application backend container to that network.
+3. Call `http://awg-api:18080` from the backend container.
+4. Send an accepted JWT and use `Idempotency-Key` for write operations.
+5. Use `api/openapi.yaml` as the source of truth for request and response
+   schemas.
+
+## Important Code Paths
+
+- `internal/api/`: HTTP handlers, service layer, tenant authorization,
+  idempotency.
+- `internal/auth/`: JWT validation, RBAC, mTLS helpers.
+- `internal/domain/profile.go`: AmneziaWG profile model and AWG2 limits.
+- `internal/outbox/worker.go`: durable outbox worker and reconciler.
+- `internal/nodeagent/`: node-local HTTP/mTLS agent and remote executor client.
+- `internal/awg/`: real `awg` CLI executor, fake executor, and dump parser.
+- `internal/render/`: AmneziaWG server/client config rendering.
+- `internal/repo/`: Postgres repositories.
+- `deploy/compose/`: local and production Docker Compose skeletons.
+- `deploy/docker/Dockerfile`: multi-target Docker image build.
+
+## Security Summary
+
+- Production API is intended for trusted backend containers on a private Docker
+  network or loopback-only host access.
+- Do not expose `awg-api` or `awg-node-agent` directly to the public internet.
+- Worker-to-node-agent transport is intended to use HTTPS with mutual TLS.
+- Tenant isolation is enforced for read and write operations.
+- Client private keys are sensitive one-time response material.
+- Node-agent diagnostic endpoints should redact private and preshared keys.
+- Runtime secrets belong in environment variables, mounted files, or Docker
+  secrets, not in Git.
+
+## Best One-Sentence Summary
+
+`awg-rest` is a production-oriented internal REST API for AmneziaWG V2 peer
+provisioning, backed by Postgres desired state and a durable worker/node-agent
+apply pipeline.

@@ -142,7 +142,8 @@ and attach the backend service to it. The backend should call `http://awg-api:18
 
 - CI builds/tests all Go packages and Docker targets; Dependabot is configured for Go modules,
   GitHub Actions, and Dockerfiles.
-- `AGENTS.md` and `llms.txt` describe the repository for coding agents and LLM tooling.
+- `AGENTS.md` and `llms.txt` describe the repository for AI discovery, LLM search, and
+  high-signal project summarization.
 - Runtime secrets stay outside Git and images: use env vars, Docker secrets, or mounted secret
   files.
 - Recommended next release step: publish the three Docker targets (`awg-api`, `awg-worker`,
