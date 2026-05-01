@@ -118,7 +118,7 @@ jobs:
             org.opencontainers.image.licenses=${{ matrix.image.licenses }}
 
       - name: Build and publish image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/docker/Dockerfile
