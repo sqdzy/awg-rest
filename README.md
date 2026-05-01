@@ -1,180 +1,349 @@
-# awg-rest - Production AmneziaWG V2 Control Plane
+# awg-rest
 
-A declarative, idempotent, multi-tenant control plane for [AmneziaWG](https://github.com/amnezia-vpn/amneziawg-go)
-V2, written in Go. Implements a backend-only control-plane pipeline:
-**REST API → Postgres (source of truth) → durable outbox → reconciler → node-agent → `awg`/kernel module.**
+Internal REST control plane for AmneziaWG V2 peer provisioning.
 
-## Highlights
+`awg-rest` is built for one deployment model: your private backend container
+calls `awg-api` over an internal Docker network, and `awg-rest` applies VPN
+state through a worker and a node-local agent. It is not a public VPN panel and
+must not be exposed directly to the internet.
 
-- **AmneziaWG V2 native**: full support for `Jc/Jmin/Jmax`, `S1-S4`, `H1-H4`, and `I1-I5` parameters
-  (incl. ranges) with versioned protocol profiles. Compatible with `amneziawg-go` and the kernel module.
-- **Postgres source of truth**: peers, profiles, IPAM, operations, outbox, audit, idempotency keys.
-- **Idempotent REST API** with `Idempotency-Key` (request-hash dedup, 409 on conflict, replay returns
-  original response). RFC 9110 / RFC 6585 compliant; `429 + Retry-After` on throttling.
-- **Outbox + reconciler** (`FOR UPDATE SKIP LOCKED`) so applying never races, and `awg syncconf`
-  is non-disruptive. Drift detection via `awg show <iface> dump`.
-- **Three-binary deployment**: `awg-api`, `awg-worker`, and `awg-node-agent`.
-- **Strict JWT validation**: dev HMAC or production asymmetric PEM (`RS256`/`ES256`/`EdDSA`),
-  `alg` allowlist, `iss`/`aud`/`exp`/`typ`, tenant-scoped RBAC, and mTLS for worker-to-agent.
-- **Test pyramid**: unit (validation, IPAM, renderer, parsers, crypto), integration (Postgres via
-  Testcontainers), e2e (full peer lifecycle with a fake AWG executor; tagged build for real-AWG
-  CI on Linux).
+## What It Provides
 
-## Layout
+- Authenticated REST API for peer creation, inspection, revocation, operation
+  status, and client configuration rendering.
+- Postgres-backed desired state for tenants, nodes, profiles, peers,
+  idempotency keys, operations, outbox jobs, and audit events.
+- Durable worker that reconciles desired state into AmneziaWG runtime state.
+- Node-local mTLS agent that calls `awg`, `awg-quick`, and `awg syncconf`.
+- OpenAPI contract for backend-to-backend integration in `api/openapi.yaml`.
+- Production compose skeleton for a backend-only Docker deployment.
 
-```
-cmd/
-  awg-api/                   # control plane HTTP API
-  awg-worker/                # outbox/reconcile worker
-  awg-node-agent/            # node-local apply agent (Linux)
-internal/
-  api/                       # HTTP handlers, middleware, problem+json
-  auth/                      # JWT + RBAC + mTLS helpers
-  awg/                       # AmneziaWG executor (real CLI + fake) and parsers
-  config/                    # app configuration
-  crypto/                    # X25519 keygen, base64, preshared keys
-  domain/                    # domain types, profile, peer, errors
-  ipam/                      # IP allocator with concurrent safety
-  obs/                       # logging, Prometheus, OTel
-  outbox/                    # outbox worker + reconciler
-  ratelimit/                 # token bucket
-  render/                    # AmneziaWG V2 config renderer
-  repo/                      # Postgres repositories (pgx)
-  server/                    # bootstrap
-migrations/                  # SQL migrations
-api/openapi.yaml             # OpenAPI 3.1
-deploy/
-  docker/                    # multi-stage Dockerfile
-  compose/                   # docker-compose stack
-test/
-  integration/               # Postgres-backed tests (testcontainers)
-  e2e/                       # end-to-end against in-process fake AWG host
-```
-
-## Quick start (dev)
-
-```bash
-# 1. Bring up Postgres + the API + a dev node-agent.
-# Ports are bound to 127.0.0.1, not all host interfaces.
-docker compose -f deploy/compose/docker-compose.yml up --build
-
-# 2. Run the unit suite (cross-platform)
-go test ./...
-
-# 3. Run integration tests (needs Docker for testcontainers)
-go test -tags=integration ./test/integration/...
-
-# 4. Run E2E with the fake executor (cross-platform)
-go test -tags=e2e ./test/e2e/...
-
-# 5. Real-AWG E2E (Linux, needs amneziawg-tools + kernel module)
-go test -tags="e2e linux_awg" ./test/e2e/...
-```
-
-## Operational model
-
-- API/worker write only **desired state** transactionally; the worker brings runtime to desired via
-  the node agent (which calls `awg syncconf` / `awg set`).
-- `SaveConfig=false` is enforced; the rendered config under `/etc/amnezia/rendered/<iface>.conf`
-  plus the DB row are the single declarative source.
-- After any restart: `awg-quick up <iface>` (if missing) -> `awg syncconf <iface> <conf>` ->
-  `awg show <iface> dump` → reconcile delta into DB → mark node ready.
-
-## Security
-
-- Tenant isolation is enforced in the service layer: non-`platform_admin` tokens must carry a
-  `tenant_id` matching the `{tenant}` URL tenant or the operation tenant.
-- JWT BCP (RFC 8725): explicit `alg` allowlist, `iss`/`aud` pinning, `exp/nbf` enforced, and
-  `typ=at+jwt` for access tokens. Production should use `JWT_PUBLIC_KEY_FILE` with an asymmetric
-  public key. `JWT_SECRET`/HS256 is for local dev or tightly internal deployments with a strong
-  secret.
-- Worker -> node-agent is HTTPS+mTLS by default. Plain HTTP requires explicit
-  `AGENT_INSECURE_HTTP=true` and `NODE_AGENT_INSECURE_HTTP=true`, intended only for dev/test.
-- Client private keys are never accepted in query strings. If the API generated a peer key, the
-  private key appears only in the first create response and is not persisted into idempotency
-  replay responses.
-- `/dump` and `/showconf` on node-agent redact interface private keys and peer preshared keys.
-- All destructive operations append to `audit_events`.
-
-## Production compose
-
-`deploy/compose/docker-compose.prod.yml` is a hardened skeleton for a backend-only deployment:
-
-- `awg-api`, `postgres`, `awg-worker`, and `awg-node-agent` do not publish host ports.
-- `awg-api` listens on `:18080` inside the container so other containers on the same Docker network
-  can call `http://awg-api:18080`.
-- The API network is `internal: true` and named `awg-backend-internal` by default. Attach your
-  backend container to that same network and do not expose `awg-api` to the public internet.
-- If you must access the API from the host, publish loopback only: `127.0.0.1:18080:18080`.
-  Do not set `HTTP_ADDR=127.0.0.1:18080` inside the API container if another container must reach it.
-
-Prepare secrets under `deploy/compose/secrets/`:
+## Architecture
 
 ```text
-postgres_password          # DB password
-database_url               # postgres://awg:<password>@postgres:5432/awg?sslmode=disable
-jwt_public_key.pem         # IdP/API public signing key, PEM
-worker.crt / worker.key    # client cert/key for awg-worker
-agent_ca.pem               # CA that signed the node-agent server cert
-agent.crt / agent.key      # node-agent server cert/key
-agent_client_ca.pem        # CA that signed worker client certs
+your backend container
+  -> http://awg-api:18080
+  -> Postgres desired state
+  -> awg-worker outbox reconciler
+  -> https://awg-node-agent:8081 with mTLS
+  -> awg / awg-quick / AmneziaWG kernel module
 ```
 
-Non-secret deployment placeholders and required image names are documented in `.env.example`.
+The API writes desired state and returns asynchronous operations. The worker
+applies that state later, so write endpoints return `202 Accepted`.
 
-Then run:
+## Requirements
+
+- Linux host or VPS with Docker and Docker Compose.
+- AmneziaWG kernel module available on the host.
+- Published images for:
+  - `ghcr.io/sqdzy/awg-rest-api:<version>`
+  - `ghcr.io/sqdzy/awg-rest-worker:<version>`
+  - `ghcr.io/sqdzy/awg-rest-node-agent:<version>`
+- JWT issuer from your backend or identity provider.
+- A PEM public key mounted into `awg-api` for JWT verification.
+- mTLS certificates for `awg-worker` -> `awg-node-agent`.
+
+Only the VPN UDP port is published by the production compose file. The API and
+node-agent HTTP ports stay inside Docker networks.
+
+## Environment
+
+Copy `.env.example` to `.env` and replace placeholders:
+
+```dotenv
+AWG_API_IMAGE=ghcr.io/sqdzy/awg-rest-api:v0.1.0
+AWG_WORKER_IMAGE=ghcr.io/sqdzy/awg-rest-worker:v0.1.0
+AWG_NODE_AGENT_IMAGE=ghcr.io/sqdzy/awg-rest-node-agent:v0.1.0
+
+JWT_ISSUER=https://idp.example.com/
+JWT_AUDIENCE=awg-control-plane
+JWT_ALLOWED_ALGS=RS256,ES256,EdDSA
+
+AWG_INTERNAL_NETWORK=awg-backend-internal
+AWG_UDP_PORT=51820
+LOG_LEVEL=info
+```
+
+For forks, replace `sqdzy` with the GitHub owner that publishes the GHCR
+packages. Replace `v0.1.0` with the release tag you want to run.
+
+## Secrets
+
+Create `deploy/compose/secrets/` on the server. Do not commit this directory.
+
+Required files:
+
+```text
+postgres_password          # random Postgres password
+database_url               # postgres://awg:<password>@postgres:5432/awg?sslmode=disable
+jwt_public_key.pem         # public JWT verification key
+worker.crt                 # worker client certificate
+worker.key                 # worker client private key
+agent_ca.pem               # CA that signed the node-agent server certificate
+agent.crt                  # node-agent server certificate
+agent.key                  # node-agent server private key
+agent_client_ca.pem        # CA allowed to authenticate worker client certs
+```
+
+Example:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.prod.yml up -d
+mkdir -p deploy/compose/secrets deploy/compose/bootstrap
+openssl rand -base64 32 > deploy/compose/secrets/postgres_password
+printf '%s' 'postgres://awg:REPLACE_PASSWORD@postgres:5432/awg?sslmode=disable' \
+  > deploy/compose/secrets/database_url
 ```
 
-For a backend in another compose project, reference the created network as external:
+Use your real certificate authority process for the JWT public key and mTLS
+files. Do not reuse the same key pair for JWT signing and mTLS.
+
+## Bootstrap Interface Config
+
+`awg-worker` normally updates runtime state with `awg syncconf`. If the
+interface does not exist yet, it asks the node-agent to run:
+
+```text
+awg-quick up /etc/amnezia/bootstrap/<interface>.conf
+```
+
+Create `deploy/compose/bootstrap/awg0.conf` or another file matching the
+`vpn_nodes.interface_name` value you insert into Postgres.
+
+Minimal shape:
+
+```ini
+[Interface]
+PrivateKey = SERVER_PRIVATE_KEY
+Address = 10.77.0.1/24
+ListenPort = 51820
+
+# AmneziaWG profile parameters must match the protocol profile row in Postgres.
+Jc = 4
+Jmin = 64
+Jmax = 128
+S1 = 0
+S2 = 0
+S3 = 0
+S4 = 0
+H1 = 1971338189
+H2 = 2109863762
+H3 = 428734483
+H4 = 1766504048
+```
+
+The control plane never stores the server private key. Keep this bootstrap file
+private and mounted only into `awg-node-agent`.
+
+## Start The Stack
+
+From the repository root on the server:
+
+```bash
+docker compose --env-file .env -f deploy/compose/docker-compose.prod.yml up -d
+```
+
+Check health from a container attached to the internal network:
+
+```bash
+docker run --rm --network awg-backend-internal curlimages/curl:8.11.1 \
+  -fsS http://awg-api:18080/health/ready
+```
+
+Do not publish `awg-api` or `awg-node-agent` host ports. If host-local access is
+temporarily needed, bind loopback only, for example `127.0.0.1:18080:18080`.
+
+## Initial Database Rows
+
+The HTTP API manages peers and operations. Tenants, nodes, profiles, and address
+pools are operator-owned bootstrap data today.
+
+Insert one tenant, node, protocol profile, and pool:
+
+```bash
+docker compose --env-file .env -f deploy/compose/docker-compose.prod.yml exec -T postgres \
+  psql -U awg -d awg <<'SQL'
+WITH tenant AS (
+  INSERT INTO tenants(slug)
+  VALUES ('acme')
+  ON CONFLICT (slug) DO UPDATE SET slug = EXCLUDED.slug
+  RETURNING id
+),
+node AS (
+  INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key)
+  VALUES ('eu-1', 'awg-node-1', 'vpn.example.com:51820', 51820, 'awg0', 'SERVER_PUBLIC_KEY')
+  ON CONFLICT (hostname) DO UPDATE SET
+    region = EXCLUDED.region,
+    public_endpoint = EXCLUDED.public_endpoint,
+    base_port = EXCLUDED.base_port,
+    interface_name = EXCLUDED.interface_name,
+    server_public_key = EXCLUDED.server_public_key
+  RETURNING id
+),
+profile AS (
+  INSERT INTO protocol_profiles(
+    name, protocol_version, jc, jmin, jmax, s1, s2, s3, s4,
+    h1_min, h1_max, h2_min, h2_max, h3_min, h3_max, h4_min, h4_max
+  )
+  VALUES (
+    'default-v2', 'v2', 4, 64, 128, 0, 0, 0, 0,
+    1971338189, 1971338189,
+    2109863762, 2109863762,
+    428734483, 428734483,
+    1766504048, 1766504048
+  )
+  ON CONFLICT (name) DO UPDATE SET
+    protocol_version = EXCLUDED.protocol_version,
+    jc = EXCLUDED.jc,
+    jmin = EXCLUDED.jmin,
+    jmax = EXCLUDED.jmax,
+    s1 = EXCLUDED.s1,
+    s2 = EXCLUDED.s2,
+    s3 = EXCLUDED.s3,
+    s4 = EXCLUDED.s4,
+    h1_min = EXCLUDED.h1_min,
+    h1_max = EXCLUDED.h1_max,
+    h2_min = EXCLUDED.h2_min,
+    h2_max = EXCLUDED.h2_max,
+    h3_min = EXCLUDED.h3_min,
+    h3_max = EXCLUDED.h3_max,
+    h4_min = EXCLUDED.h4_min,
+    h4_max = EXCLUDED.h4_max
+  RETURNING id
+)
+INSERT INTO address_pools(tenant_id, node_id, cidr)
+SELECT tenant.id, node.id, '10.77.0.128/25'::cidr
+FROM tenant, node
+ON CONFLICT (node_id, cidr) DO NOTHING;
+SQL
+```
+
+Use the same interface name, listen port, endpoint, server public key, and AWG
+profile parameters that you put into the bootstrap config.
+
+Use the tenant UUID from `SELECT id FROM tenants WHERE slug = 'acme';` as the
+`tenant_id` claim in non-`platform_admin` JWTs.
+
+## Connect Your Backend Container
+
+Attach your application backend to the same Docker network:
 
 ```yaml
+services:
+  backend:
+    image: your-backend-image
+    networks:
+      - awg-backend-internal
+
 networks:
   awg-backend-internal:
     external: true
 ```
 
-and attach the backend service to it. The backend should call `http://awg-api:18080`.
+From that backend container, call:
 
-## GitHub and release readiness
+```text
+http://awg-api:18080
+```
 
-- CI builds/tests all Go packages and Docker targets; Dependabot is configured for Go modules,
-  GitHub Actions, and Dockerfiles.
-- `AGENTS.md` and `llms.txt` describe the repository for AI discovery, LLM search, and
-  high-signal project summarization.
-- Runtime secrets stay outside Git and images: use env vars, Docker secrets, or mounted secret
-  files.
-- `.github/workflows/release.yml` publishes multi-arch GHCR images for `awg-api`, `awg-worker`,
-  and `awg-node-agent` from semver tags (`vX.Y.Z`) or manual dispatch. Images get `vX.Y.Z`,
-  `X.Y.Z`, immutable `sha-*`, and stable `latest` tags, plus SBOM/provenance attestations.
+Do not use `localhost` from another container; it points to that container
+itself, not to `awg-api`.
 
-To publish a release:
+## Authentication
+
+Every protected API call uses:
+
+```http
+Authorization: Bearer <JWT>
+```
+
+The JWT must pass:
+
+- `iss` equals `JWT_ISSUER`.
+- `aud` contains `JWT_AUDIENCE`.
+- `exp` is present and valid.
+- signing algorithm is in `JWT_ALLOWED_ALGS`.
+- `roles` contains one of:
+  - `platform_admin`
+  - `tenant_admin`
+  - `automation_client`
+  - `support_readonly` for read-only calls
+- non-`platform_admin` tokens include `tenant_id` equal to the tenant row UUID
+  behind `/v1/tenants/{tenant}`.
+
+## API Usage
+
+The source of truth for request and response schemas is `api/openapi.yaml`.
+
+Current public API:
+
+```text
+GET  /health/live
+GET  /health/ready
+GET  /metrics
+POST /v1/tenants/{tenant}/peers
+GET  /v1/tenants/{tenant}/peers/{peerID}
+POST /v1/tenants/{tenant}/peers/{peerID}:revoke
+GET  /v1/tenants/{tenant}/peers/{peerID}/configuration
+GET  /v1/operations/{id}
+```
+
+Create a peer:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+curl -sS -X POST "http://awg-api:18080/v1/tenants/acme/peers" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: peer-user-123-v1" \
+  -d '{
+    "external_id": "user-123",
+    "display_name": "User 123",
+    "profile_name": "default-v2"
+  }'
 ```
 
-The workflow publishes:
+The response includes `operation_id`, `peer_id`, `allowed_ip`, and public key
+data. If `awg-rest` generated the client key pair, `private_key` is returned
+only in the first create response and is not returned again on idempotency
+replay.
 
-```text
-ghcr.io/sqdzy/awg-rest-api:v0.1.0
-ghcr.io/sqdzy/awg-rest-worker:v0.1.0
-ghcr.io/sqdzy/awg-rest-node-agent:v0.1.0
+Poll operation status:
+
+```bash
+curl -sS "http://awg-api:18080/v1/operations/$OPERATION_ID" \
+  -H "Authorization: Bearer $JWT"
 ```
 
-For production compose, set:
+Render a client configuration:
 
-```text
-AWG_API_IMAGE=ghcr.io/sqdzy/awg-rest-api:v0.1.0
-AWG_WORKER_IMAGE=ghcr.io/sqdzy/awg-rest-worker:v0.1.0
-AWG_NODE_AGENT_IMAGE=ghcr.io/sqdzy/awg-rest-node-agent:v0.1.0
+```bash
+curl -sS "http://awg-api:18080/v1/tenants/acme/peers/$PEER_ID/configuration" \
+  -H "Authorization: Bearer $JWT"
 ```
+
+Revoke a peer:
+
+```bash
+curl -sS -X POST "http://awg-api:18080/v1/tenants/acme/peers/$PEER_ID:revoke" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: revoke-user-123-v1" \
+  -d '{"reason":"user disabled"}'
+```
+
+## Security Rules
+
+- Keep `awg-api` and `awg-node-agent` private to Docker networks.
+- Publish only the VPN UDP port from `awg-node-agent`.
+- Use asymmetric JWT validation in production through `jwt_public_key.pem`.
+- Use mTLS between `awg-worker` and `awg-node-agent`.
+- Store real secrets in mounted files or Docker secrets, never in Git.
+- Treat client private keys as one-time sensitive material.
+- Keep `deploy/compose/bootstrap/*.conf` private because it contains the server
+  private key.
 
 ## License
 
-Repository code is licensed under the MIT License. The `awg-node-agent` image also bundles
-`amneziawg-tools`, which is a separate GPL-2.0-only component built from the pinned upstream
-tag and commit in `deploy/docker/Dockerfile`.
+Repository code is licensed under MIT. The node-agent image also bundles
+`amneziawg-tools`, which is distributed under GPL-2.0-only by its upstream
+project.
