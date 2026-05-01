@@ -146,6 +146,35 @@ and attach the backend service to it. The backend should call `http://awg-api:18
   high-signal project summarization.
 - Runtime secrets stay outside Git and images: use env vars, Docker secrets, or mounted secret
   files.
-- Recommended next release step: publish the three Docker targets (`awg-api`, `awg-worker`,
-  `awg-node-agent`) to GHCR from semver tags (`vX.Y.Z`), with immutable SHA tags, SBOM/provenance,
-  and no VPS deployment logic in the image-publish workflow.
+- `.github/workflows/release.yml` publishes multi-arch GHCR images for `awg-api`, `awg-worker`,
+  and `awg-node-agent` from semver tags (`vX.Y.Z`) or manual dispatch. Images get `vX.Y.Z`,
+  `X.Y.Z`, immutable `sha-*`, and stable `latest` tags, plus SBOM/provenance attestations.
+
+To publish a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow publishes:
+
+```text
+ghcr.io/sqdzy/awg-rest-api:v0.1.0
+ghcr.io/sqdzy/awg-rest-worker:v0.1.0
+ghcr.io/sqdzy/awg-rest-node-agent:v0.1.0
+```
+
+For production compose, set:
+
+```text
+AWG_API_IMAGE=ghcr.io/sqdzy/awg-rest-api:v0.1.0
+AWG_WORKER_IMAGE=ghcr.io/sqdzy/awg-rest-worker:v0.1.0
+AWG_NODE_AGENT_IMAGE=ghcr.io/sqdzy/awg-rest-node-agent:v0.1.0
+```
+
+## License
+
+Repository code is licensed under the MIT License. The `awg-node-agent` image also bundles
+`amneziawg-tools`, which is a separate GPL-2.0-only component built from the pinned upstream
+tag and commit in `deploy/docker/Dockerfile`.
