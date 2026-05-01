@@ -1,55 +1,25 @@
 # awg-rest
 
-Internal REST control plane for AmneziaWG V2 peer provisioning.
+Internal REST API for provisioning AmneziaWG V2 peers from another backend
+container.
 
-`awg-rest` is built for one deployment model: your private backend container
-calls `awg-api` over an internal Docker network, and `awg-rest` applies VPN
-state through a worker and a node-local agent. It is not a public VPN panel and
-must not be exposed directly to the internet.
+`awg-rest` is intended to run on a private Docker network. Your application
+backend calls `http://awg-api:18080`; `awg-rest` stores desired state in
+Postgres and applies it through a worker and node-local AmneziaWG agent.
 
-## What It Provides
+Do not expose `awg-api` or `awg-node-agent` to the public internet.
 
-- Authenticated REST API for peer creation, inspection, revocation, operation
-  status, and client configuration rendering.
-- Postgres-backed desired state for tenants, nodes, profiles, peers,
-  idempotency keys, operations, outbox jobs, and audit events.
-- Durable worker that reconciles desired state into AmneziaWG runtime state.
-- Node-local mTLS agent that calls `awg`, `awg-quick`, and `awg syncconf`.
-- OpenAPI contract for backend-to-backend integration in `api/openapi.yaml`.
-- Production compose skeleton for a backend-only Docker deployment.
+## Deploy With Docker Compose
 
-## Architecture
+Use the production compose file:
 
-```text
-your backend container
-  -> http://awg-api:18080
-  -> Postgres desired state
-  -> awg-worker outbox reconciler
-  -> https://awg-node-agent:8081 with mTLS
-  -> awg / awg-quick / AmneziaWG kernel module
+```bash
+cp .env.example .env
+mkdir -p deploy/compose/secrets deploy/compose/bootstrap
+docker compose --env-file .env -f deploy/compose/docker-compose.prod.yml up -d
 ```
 
-The API writes desired state and returns asynchronous operations. The worker
-applies that state later, so write endpoints return `202 Accepted`.
-
-## Requirements
-
-- Linux host or VPS with Docker and Docker Compose.
-- AmneziaWG kernel module available on the host.
-- Published images for:
-  - `ghcr.io/sqdzy/awg-rest-api:<version>`
-  - `ghcr.io/sqdzy/awg-rest-worker:<version>`
-  - `ghcr.io/sqdzy/awg-rest-node-agent:<version>`
-- JWT issuer from your backend or identity provider.
-- A PEM public key mounted into `awg-api` for JWT verification.
-- mTLS certificates for `awg-worker` -> `awg-node-agent`.
-
-Only the VPN UDP port is published by the production compose file. The API and
-node-agent HTTP ports stay inside Docker networks.
-
-## Environment
-
-Copy `.env.example` to `.env` and replace placeholders:
+Set image tags in `.env`:
 
 ```dotenv
 AWG_API_IMAGE=ghcr.io/sqdzy/awg-rest-api:v0.1.0
@@ -65,168 +35,49 @@ AWG_UDP_PORT=51820
 LOG_LEVEL=info
 ```
 
-For forks, replace `sqdzy` with the GitHub owner that publishes the GHCR
-packages. Replace `v0.1.0` with the release tag you want to run.
-
-## Secrets
-
-Create `deploy/compose/secrets/` on the server. Do not commit this directory.
-
-Required files:
+Required secret files in `deploy/compose/secrets/`:
 
 ```text
-postgres_password          # random Postgres password
-database_url               # postgres://awg:<password>@postgres:5432/awg?sslmode=disable
-jwt_public_key.pem         # public JWT verification key
-worker.crt                 # worker client certificate
-worker.key                 # worker client private key
-agent_ca.pem               # CA that signed the node-agent server certificate
-agent.crt                  # node-agent server certificate
-agent.key                  # node-agent server private key
-agent_client_ca.pem        # CA allowed to authenticate worker client certs
+postgres_password
+database_url
+jwt_public_key.pem
+worker.crt
+worker.key
+agent_ca.pem
+agent.crt
+agent.key
+agent_client_ca.pem
 ```
 
-Example:
-
-```bash
-mkdir -p deploy/compose/secrets deploy/compose/bootstrap
-openssl rand -base64 32 > deploy/compose/secrets/postgres_password
-printf '%s' 'postgres://awg:REPLACE_PASSWORD@postgres:5432/awg?sslmode=disable' \
-  > deploy/compose/secrets/database_url
-```
-
-Use your real certificate authority process for the JWT public key and mTLS
-files. Do not reuse the same key pair for JWT signing and mTLS.
-
-## Bootstrap Interface Config
-
-`awg-worker` normally updates runtime state with `awg syncconf`. If the
-interface does not exist yet, it asks the node-agent to run:
+`database_url` must point to the compose Postgres service:
 
 ```text
-awg-quick up /etc/amnezia/bootstrap/<interface>.conf
+postgres://awg:<password>@postgres:5432/awg?sslmode=disable
 ```
 
-Create `deploy/compose/bootstrap/awg0.conf` or another file matching the
-`vpn_nodes.interface_name` value you insert into Postgres.
+`deploy/compose/bootstrap/<interface>.conf` must contain the node bootstrap
+AmneziaWG interface config with the server private key. The interface name must
+match the `vpn_nodes.interface_name` row in Postgres.
 
-Minimal shape:
+The compose file publishes only the VPN UDP port. API traffic stays inside the
+Docker network named by `AWG_INTERNAL_NETWORK`.
 
-```ini
-[Interface]
-PrivateKey = SERVER_PRIVATE_KEY
-Address = 10.77.0.1/24
-ListenPort = 51820
+## Bootstrap Data
 
-# AmneziaWG profile parameters must match the protocol profile row in Postgres.
-Jc = 4
-Jmin = 64
-Jmax = 128
-S1 = 0
-S2 = 0
-S3 = 0
-S4 = 0
-H1 = 1971338189
-H2 = 2109863762
-H3 = 428734483
-H4 = 1766504048
-```
+Before creating peers, provide these operator-owned rows in Postgres:
 
-The control plane never stores the server private key. Keep this bootstrap file
-private and mounted only into `awg-node-agent`.
+- tenant row in `tenants`
+- VPN node row in `vpn_nodes`
+- AmneziaWG V2 profile row in `protocol_profiles`
+- address pool row in `address_pools`
 
-## Start The Stack
+The public API currently manages peer lifecycle and operation status. Node,
+tenant, profile, and pool provisioning are expected to be created by your
+deployment/bootstrap process.
 
-From the repository root on the server:
+## Connect Another Backend Container
 
-```bash
-docker compose --env-file .env -f deploy/compose/docker-compose.prod.yml up -d
-```
-
-Check health from a container attached to the internal network:
-
-```bash
-docker run --rm --network awg-backend-internal curlimages/curl:8.11.1 \
-  -fsS http://awg-api:18080/health/ready
-```
-
-Do not publish `awg-api` or `awg-node-agent` host ports. If host-local access is
-temporarily needed, bind loopback only, for example `127.0.0.1:18080:18080`.
-
-## Initial Database Rows
-
-The HTTP API manages peers and operations. Tenants, nodes, profiles, and address
-pools are operator-owned bootstrap data today.
-
-Insert one tenant, node, protocol profile, and pool:
-
-```bash
-docker compose --env-file .env -f deploy/compose/docker-compose.prod.yml exec -T postgres \
-  psql -U awg -d awg <<'SQL'
-WITH tenant AS (
-  INSERT INTO tenants(slug)
-  VALUES ('acme')
-  ON CONFLICT (slug) DO UPDATE SET slug = EXCLUDED.slug
-  RETURNING id
-),
-node AS (
-  INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key)
-  VALUES ('eu-1', 'awg-node-1', 'vpn.example.com:51820', 51820, 'awg0', 'SERVER_PUBLIC_KEY')
-  ON CONFLICT (hostname) DO UPDATE SET
-    region = EXCLUDED.region,
-    public_endpoint = EXCLUDED.public_endpoint,
-    base_port = EXCLUDED.base_port,
-    interface_name = EXCLUDED.interface_name,
-    server_public_key = EXCLUDED.server_public_key
-  RETURNING id
-),
-profile AS (
-  INSERT INTO protocol_profiles(
-    name, protocol_version, jc, jmin, jmax, s1, s2, s3, s4,
-    h1_min, h1_max, h2_min, h2_max, h3_min, h3_max, h4_min, h4_max
-  )
-  VALUES (
-    'default-v2', 'v2', 4, 64, 128, 0, 0, 0, 0,
-    1971338189, 1971338189,
-    2109863762, 2109863762,
-    428734483, 428734483,
-    1766504048, 1766504048
-  )
-  ON CONFLICT (name) DO UPDATE SET
-    protocol_version = EXCLUDED.protocol_version,
-    jc = EXCLUDED.jc,
-    jmin = EXCLUDED.jmin,
-    jmax = EXCLUDED.jmax,
-    s1 = EXCLUDED.s1,
-    s2 = EXCLUDED.s2,
-    s3 = EXCLUDED.s3,
-    s4 = EXCLUDED.s4,
-    h1_min = EXCLUDED.h1_min,
-    h1_max = EXCLUDED.h1_max,
-    h2_min = EXCLUDED.h2_min,
-    h2_max = EXCLUDED.h2_max,
-    h3_min = EXCLUDED.h3_min,
-    h3_max = EXCLUDED.h3_max,
-    h4_min = EXCLUDED.h4_min,
-    h4_max = EXCLUDED.h4_max
-  RETURNING id
-)
-INSERT INTO address_pools(tenant_id, node_id, cidr)
-SELECT tenant.id, node.id, '10.77.0.128/25'::cidr
-FROM tenant, node
-ON CONFLICT (node_id, cidr) DO NOTHING;
-SQL
-```
-
-Use the same interface name, listen port, endpoint, server public key, and AWG
-profile parameters that you put into the bootstrap config.
-
-Use the tenant UUID from `SELECT id FROM tenants WHERE slug = 'acme';` as the
-`tenant_id` claim in non-`platform_admin` JWTs.
-
-## Connect Your Backend Container
-
-Attach your application backend to the same Docker network:
+Attach your backend container to the same Docker network:
 
 ```yaml
 services:
@@ -240,42 +91,38 @@ networks:
     external: true
 ```
 
-From that backend container, call:
+Use this base URL from that backend container:
 
 ```text
 http://awg-api:18080
 ```
 
-Do not use `localhost` from another container; it points to that container
-itself, not to `awg-api`.
+Do not use `localhost` from another container.
 
 ## Authentication
 
-Every protected API call uses:
+Protected endpoints require:
 
 ```http
 Authorization: Bearer <JWT>
 ```
 
-The JWT must pass:
+JWT requirements:
 
-- `iss` equals `JWT_ISSUER`.
-- `aud` contains `JWT_AUDIENCE`.
-- `exp` is present and valid.
-- signing algorithm is in `JWT_ALLOWED_ALGS`.
-- `roles` contains one of:
-  - `platform_admin`
-  - `tenant_admin`
-  - `automation_client`
-  - `support_readonly` for read-only calls
-- non-`platform_admin` tokens include `tenant_id` equal to the tenant row UUID
-  behind `/v1/tenants/{tenant}`.
+- `iss` equals `JWT_ISSUER`
+- `aud` contains `JWT_AUDIENCE`
+- `exp` is present and valid
+- signing algorithm is in `JWT_ALLOWED_ALGS`
+- `roles` contains `platform_admin`, `tenant_admin`, `automation_client`, or
+  `support_readonly` for read-only calls
+- non-`platform_admin` tokens must include `tenant_id` matching the tenant UUID
+  behind `/v1/tenants/{tenant}`
 
-## API Usage
+## API
 
-The source of truth for request and response schemas is `api/openapi.yaml`.
+OpenAPI contract: `api/openapi.yaml`
 
-Current public API:
+Endpoints:
 
 ```text
 GET  /health/live
@@ -302,11 +149,6 @@ curl -sS -X POST "http://awg-api:18080/v1/tenants/acme/peers" \
   }'
 ```
 
-The response includes `operation_id`, `peer_id`, `allowed_ip`, and public key
-data. If `awg-rest` generated the client key pair, `private_key` is returned
-only in the first create response and is not returned again on idempotency
-replay.
-
 Poll operation status:
 
 ```bash
@@ -314,7 +156,7 @@ curl -sS "http://awg-api:18080/v1/operations/$OPERATION_ID" \
   -H "Authorization: Bearer $JWT"
 ```
 
-Render a client configuration:
+Render client configuration:
 
 ```bash
 curl -sS "http://awg-api:18080/v1/tenants/acme/peers/$PEER_ID/configuration" \
@@ -331,16 +173,18 @@ curl -sS -X POST "http://awg-api:18080/v1/tenants/acme/peers/$PEER_ID:revoke" \
   -d '{"reason":"user disabled"}'
 ```
 
-## Security Rules
+If `awg-rest` generated the peer key pair, `private_key` is returned only in the
+first create response and is not returned on idempotency replay.
+
+## Security Notes
 
 - Keep `awg-api` and `awg-node-agent` private to Docker networks.
-- Publish only the VPN UDP port from `awg-node-agent`.
-- Use asymmetric JWT validation in production through `jwt_public_key.pem`.
+- Publish only the VPN UDP port.
+- Use asymmetric JWT validation through `jwt_public_key.pem`.
 - Use mTLS between `awg-worker` and `awg-node-agent`.
-- Store real secrets in mounted files or Docker secrets, never in Git.
-- Treat client private keys as one-time sensitive material.
-- Keep `deploy/compose/bootstrap/*.conf` private because it contains the server
-  private key.
+- Store secrets in mounted files or Docker secrets, not in Git.
+- Keep bootstrap interface configs private because they contain server private
+  keys.
 
 ## License
 
