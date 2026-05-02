@@ -75,7 +75,6 @@ func TestWriteBootstrapConfIncludesPrivateKeyAndNAT(t *testing.T) {
 		"PrivateKey = server-private-key",
 		"Address = 10.200.0.1/24",
 		"ListenPort = 51820",
-		"PostUp = sysctl -w net.ipv4.ip_forward=1",
 		"iptables -t nat -C POSTROUTING -s 10.200.0.0/24 -o eth0 -j MASQUERADE",
 	} {
 		if !strings.Contains(cfg, want) {

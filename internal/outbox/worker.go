@@ -203,7 +203,7 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 			return err
 		}
 		if upErr := w.Executor.InterfaceUp(ctx, node.InterfaceName, w.bootstrapConfigPath(node.InterfaceName)); upErr != nil {
-			return err
+			return fmt.Errorf("bring interface up after syncconf failed: %w (syncconf: %v)", upErr, err)
 		}
 		if err := w.Executor.SyncConf(ctx, node.InterfaceName, cfg); err != nil {
 			return err
@@ -233,7 +233,8 @@ func isMissingInterfaceError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "interface not found") ||
 		strings.Contains(msg, "cannot find device") ||
-		strings.Contains(msg, "no such device")
+		strings.Contains(msg, "no such device") ||
+		strings.Contains(msg, "protocol not supported")
 }
 
 // lookupNodeProfile returns the profile associated with the most recently

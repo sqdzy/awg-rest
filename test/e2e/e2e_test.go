@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -399,6 +400,27 @@ func TestE2E_FailureSurvivesAndRetries(t *testing.T) {
 	// Wait out the lease, then the worker picks the same job up again and
 	// applies it (failure was one-shot).
 	expireLeases(t, env.DB)
+	ran, err := env.Worker.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.True(t, ran)
+	require.Len(t, env.Executor.Snapshot("awg0"), 1)
+}
+
+func TestE2E_WorkerBootstrapsUserspaceAfterProtocolNotSupported(t *testing.T) {
+	env := newTestEnv(t)
+	bearer := env.bearerForAdmin(t)
+	client := env.Server.Client()
+
+	require.NoError(t, env.Executor.InterfaceDown(context.Background(), "awg0"))
+
+	resp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "userspace-bootstrap-1", map[string]any{
+			"external_id": "userspace-bootstrap-1", "profile_name": env.Profile.Name,
+		})
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+
+	env.Executor.FailSyncConf = errors.New(`awg: awg [syncconf awg0 /tmp/stripped.conf] failed: exit status 1 (stderr="Unable to retrieve current interface configuration: Protocol not supported\n")`)
+
 	ran, err := env.Worker.RunOnce(context.Background())
 	require.NoError(t, err)
 	require.True(t, ran)

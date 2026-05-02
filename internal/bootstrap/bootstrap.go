@@ -245,7 +245,6 @@ func natHooks(pool netip.Prefix, iface, egress string, enabled bool) (string, st
 	}
 	cidr := pool.String()
 	upRules := []string{
-		"sysctl -w net.ipv4.ip_forward=1",
 		fmt.Sprintf("iptables -C FORWARD -i %s -o %s -j ACCEPT || iptables -A FORWARD -i %s -o %s -j ACCEPT", iface, egress, iface, egress),
 		fmt.Sprintf("iptables -C FORWARD -i %s -o %s -m state --state RELATED,ESTABLISHED -j ACCEPT || iptables -A FORWARD -i %s -o %s -m state --state RELATED,ESTABLISHED -j ACCEPT", egress, iface, egress, iface),
 		fmt.Sprintf("iptables -t nat -C POSTROUTING -s %s -o %s -j MASQUERADE || iptables -t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", cidr, egress, cidr, egress),

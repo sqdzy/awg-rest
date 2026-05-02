@@ -3,7 +3,6 @@
 package awg
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -36,14 +35,40 @@ func NewCLIExecutor() *CLIExecutor {
 
 func (c *CLIExecutor) run(ctx context.Context, name string, args ...string) (string, string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return stdout.String(), stderr.String(),
-			fmt.Errorf("awg: %s %v failed: %w (stderr=%q)", name, args, err, stderr.String())
+	// awg-quick may daemonize amneziawg-go; regular files avoid waiting on
+	// stdout/stderr pipes inherited by that background process.
+	stdoutFile, err := os.CreateTemp("", "awg-stdout-*")
+	if err != nil {
+		return "", "", err
 	}
-	return stdout.String(), stderr.String(), nil
+	defer os.Remove(stdoutFile.Name())
+	stderrFile, err := os.CreateTemp("", "awg-stderr-*")
+	if err != nil {
+		_ = stdoutFile.Close()
+		return "", "", err
+	}
+	defer os.Remove(stderrFile.Name())
+
+	cmd.Stdout = stdoutFile
+	cmd.Stderr = stderrFile
+	runErr := cmd.Run()
+	_ = stdoutFile.Close()
+	_ = stderrFile.Close()
+
+	stdoutBytes, readOutErr := os.ReadFile(stdoutFile.Name())
+	if readOutErr != nil {
+		return "", "", readOutErr
+	}
+	stderrBytes, readErrErr := os.ReadFile(stderrFile.Name())
+	if readErrErr != nil {
+		return "", "", readErrErr
+	}
+	stdout, stderr := string(stdoutBytes), string(stderrBytes)
+	if runErr != nil {
+		return stdout, stderr,
+			fmt.Errorf("awg: %s %v failed: %w (stderr=%q)", name, args, runErr, stderr)
+	}
+	return stdout, stderr, nil
 }
 
 func (c *CLIExecutor) SyncConf(ctx context.Context, iface, config string) error {
