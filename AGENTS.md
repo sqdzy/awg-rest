@@ -82,10 +82,10 @@ The canonical machine-readable API contract is `api/openapi.yaml`.
 
 High-level endpoint groups:
 
-- `/healthz`, `/readyz`, `/metrics` for health, readiness, and observability.
+- `/health/live` and `/health/ready` for health and readiness.
 - `/v1/tenants/{tenant}/profiles` for AmneziaWG protocol profiles.
 - `/v1/tenants/{tenant}/peers` for peer lifecycle management.
-- `/v1/tenants/{tenant}/peers/{peer_id}/config` for client configuration
+- `/v1/tenants/{tenant}/peers/{peerID}/configuration` for client configuration
   retrieval.
 - `/v1/operations/{operation_id}` for asynchronous operation status.
 - `/v1/nodes` for node inventory and readiness state.
@@ -133,7 +133,7 @@ and no embedded secrets in the image.
 - `compose.yaml` - plug-and-play single-VPS Docker Compose file.
 - `deploy/docker/Dockerfile.all-in-one` - public all-in-one image build.
 - `internal/` - Go implementation of API, domain, auth, repositories, worker,
-  renderer, worker, and optional node-agent components.
+  renderer, and optional node-agent components.
 
 ## AI Agent Summary
 
