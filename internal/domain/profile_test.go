@@ -11,8 +11,8 @@ func validV2() ProtocolProfile {
 	return ProtocolProfile{
 		Name:            "default-v2",
 		ProtocolVersion: ProtocolV2,
-		Jc:              5, Jmin: 64, Jmax: 1000,
-		S1: 40, S2: 32, S3: 0, S4: 0,
+		Jc:              5, Jmin: 10, Jmax: 50,
+		S1: 130, S2: 89, S3: 31, S4: 18,
 		H1: IntRange{Min: 1_000, Max: 2_000},
 		H2: IntRange{Min: 3_000, Max: 4_000},
 		H3: IntRange{Min: 5_000, Max: 6_000},
@@ -42,10 +42,10 @@ func TestProtocolProfile_AllowsZeroJunkRangeWhenNoJunkPackets(t *testing.T) {
 	require.NoError(t, p.Validate())
 }
 
-func TestProtocolProfile_RejectsJunkPacketsWithoutOfficialSizeRange(t *testing.T) {
+func TestProtocolProfile_RejectsJunkPacketsWithoutSizeRange(t *testing.T) {
 	t.Parallel()
 	p := validV2()
-	p.Jmin = 50
+	p.Jmin = 0
 	err := p.Validate()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "jmin")
@@ -62,7 +62,7 @@ func TestProtocolProfile_RejectsJminGreaterThanJmax(t *testing.T) {
 func TestProtocolProfile_RejectsPaddingOverOfficialCaps(t *testing.T) {
 	t.Parallel()
 	p := validV2()
-	p.S2 = 65
+	p.S2 = 1189
 	require.Error(t, p.Validate())
 
 	p = validV2()

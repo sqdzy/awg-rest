@@ -197,6 +197,7 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 	cfg := render.Server(render.Interface{
 		ListenPort: node.BasePort,
 	}, *profile, entries)
+	cfg = w.preserveRuntimePrivateKey(ctx, node.InterfaceName, cfg)
 
 	if err := w.Executor.SyncConf(ctx, node.InterfaceName, cfg); err != nil {
 		if !isMissingInterfaceError(err) {
@@ -205,17 +206,32 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 		if upErr := w.Executor.InterfaceUp(ctx, node.InterfaceName, w.bootstrapConfigPath(node.InterfaceName)); upErr != nil {
 			return fmt.Errorf("bring interface up after syncconf failed: %w (syncconf: %v)", upErr, err)
 		}
+		cfg = w.preserveRuntimePrivateKey(ctx, node.InterfaceName, cfg)
 		if err := w.Executor.SyncConf(ctx, node.InterfaceName, cfg); err != nil {
 			return err
 		}
 	}
 
 	// Pull runtime stats and update peer_runtime + applied_revision.
-	_, runtimePeers, err := w.Executor.ShowDump(ctx, node.InterfaceName)
+	iface, runtimePeers, err := w.Executor.ShowDump(ctx, node.InterfaceName)
 	if err != nil {
 		return err
 	}
+	if node.ServerPublicKey != "" && iface.PublicKey != node.ServerPublicKey {
+		return fmt.Errorf("runtime public key mismatch for %s: got %q want %q", node.InterfaceName, iface.PublicKey, node.ServerPublicKey)
+	}
 	return w.persistRuntime(ctx, peers, runtimePeers)
+}
+
+func (w *Worker) preserveRuntimePrivateKey(ctx context.Context, iface, cfg string) string {
+	if awg.InterfaceValue(cfg, "PrivateKey") != "" {
+		return cfg
+	}
+	current, err := w.Executor.ShowConf(ctx, iface)
+	if err != nil {
+		return cfg
+	}
+	return awg.PreserveInterfacePrivateKey(cfg, current)
 }
 
 func (w *Worker) bootstrapConfigPath(iface string) string {

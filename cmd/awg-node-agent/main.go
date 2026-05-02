@@ -36,7 +36,11 @@ func main() {
 
 	var executor awg.Executor
 	if runtime.GOOS == "linux" {
-		executor = awg.NewCLIExecutor()
+		ex := awg.NewCLIExecutor()
+		if dir := os.Getenv("BOOTSTRAP_CONF_DIR"); dir != "" {
+			ex.BootstrapConfigDir = dir
+		}
+		executor = ex
 	} else {
 		logger.Warn("non-linux build; using fake AWG executor", "goos", runtime.GOOS)
 		executor = awg.NewFakeExecutor(time.Time{})

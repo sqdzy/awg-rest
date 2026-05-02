@@ -121,7 +121,9 @@ func buildExecutor(cfg *config.Config, logger *slog.Logger) awg.Executor {
 		return awg.NewFakeExecutor(time.Time{})
 	case "cli":
 		if runtime.GOOS == "linux" {
-			return awg.NewCLIExecutor()
+			ex := awg.NewCLIExecutor()
+			ex.BootstrapConfigDir = cfg.BootstrapConfigDir
+			return ex
 		}
 		logger.Warn("cli executor requested on non-linux OS; using fake")
 		return awg.NewFakeExecutor(time.Time{})

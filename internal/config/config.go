@@ -27,6 +27,7 @@ type Config struct {
 	RateRefillPerS float64
 
 	NodeAgentURL string
+	ClientDNS    []string
 
 	// Embedded worker (API + worker in one process).
 	EnableEmbeddedWorker bool
@@ -71,6 +72,7 @@ func Load() (*Config, error) {
 		RateCapacity:         envInt("RATE_CAPACITY", 60),
 		RateRefillPerS:       envFloat("RATE_REFILL_PER_S", 1.0),
 		NodeAgentURL:         env("NODE_AGENT_URL", "http://127.0.0.1:8081"),
+		ClientDNS:            splitCSV(env("CLIENT_DNS", "1.1.1.1,1.0.0.1")),
 		EnableEmbeddedWorker: envBool("ENABLE_EMBEDDED_WORKER", false),
 		EmbeddedWorkerExec:   env("EMBEDDED_WORKER_EXEC", "fake"),
 		BootstrapConfigDir:   env("BOOTSTRAP_CONF_DIR", ""),

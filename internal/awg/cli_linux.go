@@ -19,17 +19,19 @@ import (
 // WG_QUICK_USERSPACE_IMPLEMENTATION; node-agent must run as root or with
 // CAP_NET_ADMIN.
 type CLIExecutor struct {
-	AwgBinary      string // default: "awg"
-	AwgQuickBinary string // default: "awg-quick"
-	RenderedDir    string // default: "/etc/amnezia/rendered"
+	AwgBinary          string // default: "awg"
+	AwgQuickBinary     string // default: "awg-quick"
+	RenderedDir        string // default: "/etc/amnezia/rendered"
+	BootstrapConfigDir string // default: "/etc/amnezia/bootstrap"
 }
 
 // NewCLIExecutor returns a CLI executor with sensible defaults.
 func NewCLIExecutor() *CLIExecutor {
 	return &CLIExecutor{
-		AwgBinary:      "awg",
-		AwgQuickBinary: "awg-quick",
-		RenderedDir:    "/etc/amnezia/rendered",
+		AwgBinary:          "awg",
+		AwgQuickBinary:     "awg-quick",
+		RenderedDir:        "/etc/amnezia/rendered",
+		BootstrapConfigDir: "/etc/amnezia/bootstrap",
 	}
 }
 
@@ -75,6 +77,7 @@ func (c *CLIExecutor) SyncConf(ctx context.Context, iface, config string) error 
 	if err := validateInterfaceName(iface); err != nil {
 		return err
 	}
+	config = c.preservePrivateKey(ctx, iface, config)
 	if err := os.MkdirAll(c.RenderedDir, 0o700); err != nil {
 		return fmt.Errorf("rendered dir: %w", err)
 	}
@@ -102,6 +105,29 @@ func (c *CLIExecutor) SyncConf(ctx context.Context, iface, config string) error 
 	}
 	_, _, err = c.run(ctx, c.AwgBinary, "syncconf", iface, tmp.Name())
 	return err
+}
+
+func (c *CLIExecutor) preservePrivateKey(ctx context.Context, iface, config string) string {
+	if InterfaceValue(config, "PrivateKey") != "" {
+		return config
+	}
+	if current, _, err := c.run(ctx, c.AwgBinary, "showconf", iface); err == nil {
+		config = PreserveInterfacePrivateKey(config, current)
+		if InterfaceValue(config, "PrivateKey") != "" {
+			return config
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(c.bootstrapConfigDir(), iface+".conf")); err == nil {
+		config = PreserveInterfacePrivateKey(config, string(b))
+	}
+	return config
+}
+
+func (c *CLIExecutor) bootstrapConfigDir() string {
+	if c.BootstrapConfigDir != "" {
+		return c.BootstrapConfigDir
+	}
+	return "/etc/amnezia/bootstrap"
 }
 
 func (c *CLIExecutor) SetPeer(ctx context.Context, iface string, p PeerSpec) error {
@@ -176,7 +202,7 @@ func (c *CLIExecutor) InterfaceUp(ctx context.Context, iface, configPath string)
 		return nil
 	}
 	if configPath == "" {
-		configPath = filepath.Join(c.RenderedDir, iface+".conf")
+		configPath = filepath.Join(c.bootstrapConfigDir(), iface+".conf")
 	}
 	_, _, err := c.run(ctx, c.AwgQuickBinary, "up", configPath)
 	return err

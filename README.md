@@ -39,6 +39,7 @@ Edit `.env`:
 ```dotenv
 BOOTSTRAP_NODE_ENDPOINT=203.0.113.10
 JWT_SECRET=replace-with-at-least-32-random-bytes
+CLIENT_DNS=1.1.1.1,1.0.0.1
 AWG_API_BIND=127.0.0.1:18080
 AWG_UDP_BIND=51820
 AWG_UDP_PORT=51820
@@ -69,6 +70,10 @@ On first start, the container creates:
 The server uses the first usable IPv4 address in the pool, so the default
 server address is `10.200.0.1/24` and generated peers start from
 `10.200.0.2/32`.
+
+The default `default-v2` profile uses AmneziaWG V2 parameters compatible with
+current AmneziaVPN clients, including `Jmin=10`, `Jmax=50`, `S1-S4`, and
+non-overlapping `H1-H4` ranges below `2147483647`.
 
 Back up both Docker volumes. `awg-state` contains the server private key.
 
@@ -190,6 +195,7 @@ Important `.env` values:
 | --- | --- |
 | `AWG_REST_IMAGE` | all-in-one image tag |
 | `BOOTSTRAP_NODE_ENDPOINT` | public IP or DNS name placed into client configs |
+| `CLIENT_DNS` | comma-separated DNS servers rendered into generated client configs |
 | `JWT_SECRET` | HMAC signing secret shared only with your backend |
 | `AWG_API_BIND` | host binding for REST API, keep loopback-only |
 | `AWG_UDP_BIND` | host UDP binding for VPN traffic |

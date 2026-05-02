@@ -3,6 +3,7 @@ package awg
 import (
 	"context"
 	"errors"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -13,9 +14,10 @@ import (
 // It models interface state and peers, provides parsable `show dump` output,
 // and lets tests inject failures via Fail*.
 type FakeExecutor struct {
-	mu          sync.Mutex
-	now         func() time.Time
-	interfaces  map[string]*fakeIface
+	mu         sync.Mutex
+	now        func() time.Time
+	interfaces map[string]*fakeIface
+	bootstraps map[string]*fakeIface
 
 	// Optional injected failures. When set, the next call to the matching
 	// method returns the error and clears the field (one-shot).
@@ -42,14 +44,26 @@ func NewFakeExecutor(fixedNow time.Time) *FakeExecutor {
 	if !fixedNow.IsZero() {
 		now = func() time.Time { return fixedNow }
 	}
-	return &FakeExecutor{now: now, interfaces: make(map[string]*fakeIface)}
+	return &FakeExecutor{
+		now:        now,
+		interfaces: make(map[string]*fakeIface),
+		bootstraps: make(map[string]*fakeIface),
+	}
 }
 
 // Provision is a test helper: pre-create an interface with given keys/port.
 func (f *FakeExecutor) Provision(iface, priv, pub string, port int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.interfaces[iface] = &fakeIface{priv: priv, pub: pub, listenPort: port, peers: map[string]*PeerRuntime{}}
+	ifc := &fakeIface{
+		priv:       priv,
+		pub:        pub,
+		listenPort: port,
+		rendered:   "[Interface]\nPrivateKey = " + priv + "\nListenPort = " + itoa(port) + "\n",
+		peers:      map[string]*PeerRuntime{},
+	}
+	f.interfaces[iface] = ifc
+	f.bootstraps[iface] = cloneIface(ifc)
 }
 
 // Snapshot returns a deep-ish copy of peers known to the iface, for assertions.
@@ -90,6 +104,12 @@ func (f *FakeExecutor) SyncConf(ctx context.Context, iface, config string) error
 	ifc.rendered = config
 	if parsed.iface.PrivateKey != "" {
 		ifc.priv = parsed.iface.PrivateKey
+		if ifc.pub == "" {
+			ifc.pub = "fake-public-" + parsed.iface.PrivateKey
+		}
+	} else {
+		ifc.priv = ""
+		ifc.pub = ""
 	}
 	if parsed.iface.ListenPort != 0 {
 		ifc.listenPort = parsed.iface.ListenPort
@@ -218,7 +238,11 @@ func (f *FakeExecutor) InterfaceUp(ctx context.Context, iface, configPath string
 		return err
 	}
 	if _, ok := f.interfaces[iface]; !ok {
-		f.interfaces[iface] = &fakeIface{peers: map[string]*PeerRuntime{}}
+		if restored := f.restoreFromBootstrapLocked(iface, configPath); restored != nil {
+			f.interfaces[iface] = restored
+		} else {
+			f.interfaces[iface] = &fakeIface{peers: map[string]*PeerRuntime{}}
+		}
 	}
 	return nil
 }
@@ -229,8 +253,54 @@ func (f *FakeExecutor) InterfaceDown(ctx context.Context, iface string) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	delete(f.interfaces, iface)
+	if ifc, ok := f.interfaces[iface]; ok {
+		f.bootstraps[iface] = cloneIface(ifc)
+		delete(f.interfaces, iface)
+	}
 	return nil
+}
+
+func (f *FakeExecutor) restoreFromBootstrapLocked(iface, configPath string) *fakeIface {
+	if configPath != "" {
+		if b, err := os.ReadFile(configPath); err == nil {
+			if parsed, err := parseRenderedConfig(string(b)); err == nil {
+				ifc := &fakeIface{
+					priv:       parsed.iface.PrivateKey,
+					pub:        "fake-public-" + parsed.iface.PrivateKey,
+					listenPort: parsed.iface.ListenPort,
+					rendered:   string(b),
+					peers:      map[string]*PeerRuntime{},
+				}
+				if ifc.priv == "" {
+					ifc.pub = ""
+				}
+				return ifc
+			}
+		}
+	}
+	if boot := f.bootstraps[iface]; boot != nil {
+		return cloneIface(boot)
+	}
+	return nil
+}
+
+func cloneIface(in *fakeIface) *fakeIface {
+	if in == nil {
+		return nil
+	}
+	out := &fakeIface{
+		priv:       in.priv,
+		pub:        in.pub,
+		listenPort: in.listenPort,
+		rendered:   in.rendered,
+		peers:      make(map[string]*PeerRuntime, len(in.peers)),
+	}
+	for k, p := range in.peers {
+		cp := *p
+		cp.AllowedIPs = append([]string{}, p.AllowedIPs...)
+		out.peers[k] = &cp
+	}
+	return out
 }
 
 // SimulateHandshake mutates runtime stats for a peer, useful for E2E tests.
@@ -336,4 +406,18 @@ func fmtScan(dst *int, s string) (int, error) {
 		*dst = *dst*10 + int(ch-'0')
 	}
 	return 1, nil
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for i > 0 {
+		pos--
+		buf[pos] = byte('0' + i%10)
+		i /= 10
+	}
+	return string(buf[pos:])
 }

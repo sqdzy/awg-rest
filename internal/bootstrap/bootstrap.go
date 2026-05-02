@@ -93,22 +93,24 @@ func RunIfEmpty(ctx context.Context, db *repo.DB, d Defaults, logger *slog.Logge
 	}
 	logger.InfoContext(ctx, "bootstrapped tenant", "slug", d.TenantSlug, "id", t.ID)
 
-	// Profile (V2 with sensible defaults)
+	// Profile (V2 with AmneziaVPN-compatible defaults).  The ranges stay below
+	// signed int32 max because several clients and tools document or generate
+	// H1-H4 values in that compatibility band.
 	profiles := &repo.Profiles{DB: db}
 	profile, err := profiles.Insert(ctx, domain.ProtocolProfile{
 		Name:             d.ProfileName,
 		ProtocolVersion:  domain.ProtocolV2,
-		Jc:               4,
-		Jmin:             100,
-		Jmax:             200,
-		S1:               20,
-		S2:               20,
-		S3:               20,
-		S4:               8,
-		H1:               domain.IntRange{Min: 0x12345678, Max: 0x12345678},
-		H2:               domain.IntRange{Min: 0x87654321, Max: 0x87654321},
-		H3:               domain.IntRange{Min: 0xABCDEF01, Max: 0xABCDEF01},
-		H4:               domain.IntRange{Min: 0x10FEDCBA, Max: 0x10FEDCBA},
+		Jc:               5,
+		Jmin:             10,
+		Jmax:             50,
+		S1:               130,
+		S2:               89,
+		S3:               31,
+		S4:               18,
+		H1:               domain.IntRange{Min: 1820352565, Max: 1967349318},
+		H2:               domain.IntRange{Min: 2027388662, Max: 2115196205},
+		H3:               domain.IntRange{Min: 2144626841, Max: 2145335687},
+		H4:               domain.IntRange{Min: 2146302274, Max: 2147385353},
 		ListenPortPolicy: "fixed",
 	})
 	if err != nil {

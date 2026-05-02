@@ -56,6 +56,7 @@ func BuildAPI(ctx context.Context, cfg *config.Config) (*Built, error) {
 		Idem:           &repo.Idempotency{DB: db},
 		Audit:          &repo.Audit{DB: db},
 		IdempotencyTTL: cfg.IdempotencyTTL,
+		ClientDNS:      cfg.ClientDNS,
 	}
 	handlers := &api.Handlers{Service: svc}
 	validator, err := buildJWTValidator(cfg)

@@ -32,6 +32,7 @@ type Service struct {
 	Idem           *repo.Idempotency
 	Audit          *repo.Audit
 	IdempotencyTTL time.Duration
+	ClientDNS      []string
 
 	// Now is used for tests.
 	Now func() time.Time
@@ -234,6 +235,7 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			resp.ClientConfig = render.Client(render.ClientArgs{
 				ClientPrivateKey: priv,
 				ClientAddress:    []string{peer.AllowedIP.String()},
+				DNS:              s.ClientDNS,
 				ServerPublicKey:  node.ServerPublicKey,
 				ServerEndpoint:   node.PublicEndpoint,
 				Keepalive:        25,
@@ -403,6 +405,7 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 	}
 	out := render.Client(render.ClientArgs{
 		ClientAddress:   []string{peer.AllowedIP.String()},
+		DNS:             s.ClientDNS,
 		ServerPublicKey: node.ServerPublicKey,
 		ServerEndpoint:  node.PublicEndpoint,
 		Keepalive:       25,

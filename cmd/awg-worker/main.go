@@ -59,7 +59,9 @@ func main() {
 		executor = ex
 		logger.Info("using remote node-agent executor", "url", cfg.NodeAgentURL)
 	case runtime.GOOS == "linux":
-		executor = awg.NewCLIExecutor()
+		ex := awg.NewCLIExecutor()
+		ex.BootstrapConfigDir = cfg.BootstrapConfigDir
+		executor = ex
 		logger.Info("using local awg CLI executor")
 	default:
 		logger.Warn("non-linux build; using fake AWG executor", "goos", runtime.GOOS)
