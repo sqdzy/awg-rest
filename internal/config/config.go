@@ -48,6 +48,7 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	jwtSecret = strings.TrimSpace(jwtSecret)
 	publicKey, err := envOrFile("JWT_PUBLIC_KEY_PEM", "JWT_PUBLIC_KEY_FILE", "")
 	if err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ func env(k, def string) string {
 }
 
 func envOrFile(k, fileK, def string) (string, error) {
-	if v, ok := os.LookupEnv(k); ok {
+	if v, ok := os.LookupEnv(k); ok && v != "" {
 		return strings.ReplaceAll(v, `\n`, "\n"), nil
 	}
 	if path, ok := os.LookupEnv(fileK); ok && path != "" {

@@ -66,6 +66,10 @@ On first start, the container creates:
 - address pool `10.200.0.0/24`
 - server private key and bootstrap interface config in `awg-state`
 
+The server uses the first usable IPv4 address in the pool, so the default
+server address is `10.200.0.1/24` and generated peers start from
+`10.200.0.2/32`.
+
 Back up both Docker volumes. `awg-state` contains the server private key.
 
 ## Connect Your Backend

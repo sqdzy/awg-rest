@@ -76,6 +76,7 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV PGDATA=/var/lib/postgresql/data
 ENV AWG_STATE_DIR=/var/lib/awg-rest
 ENV DATABASE_URL=postgres://postgres@127.0.0.1:5432/awg?sslmode=disable
+ENV JWT_SECRET_FILE=/var/lib/awg-rest/jwt_secret
 ENV HTTP_ADDR=:18080
 ENV JWT_ISSUER=awg-rest
 ENV JWT_AUDIENCE=awg-control-plane

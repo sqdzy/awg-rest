@@ -77,6 +77,9 @@ FOR UPDATE`
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if gateway, ok := gatewayAddress(pool); ok {
+		used[gateway] = struct{}{}
+	}
 
 	allocation, err := ipam.Allocate(pool, cursor, reservedMap(used))
 	if err != nil {
@@ -257,3 +260,18 @@ func scanPeer(row pgx.Row) (*domain.Peer, error) {
 type reservedMap map[netip.Addr]struct{}
 
 func (r reservedMap) IsReserved(a netip.Addr) bool { _, ok := r[a]; return ok }
+
+// gatewayAddress is the address reserved for the node interface inside an IPv4
+// client pool. The all-in-one bootstrap renders the node as the first usable
+// address, for example 10.200.0.1/24, so peers must never receive it.
+func gatewayAddress(pool netip.Prefix) (netip.Addr, bool) {
+	pool = pool.Masked()
+	if !pool.IsValid() || !pool.Addr().Is4() || pool.Bits() >= 31 {
+		return netip.Addr{}, false
+	}
+	addr := pool.Addr().Next()
+	if !addr.IsValid() || !pool.Contains(addr) {
+		return netip.Addr{}, false
+	}
+	return addr, true
+}

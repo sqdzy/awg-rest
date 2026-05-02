@@ -23,6 +23,7 @@ func TestAllocateAndInsert_AssignsSequentialIPs(t *testing.T) {
 
 	peers := &repo.Peers{DB: db}
 	addresses := map[string]struct{}{}
+	var allocated []string
 
 	for i := 0; i < 10; i++ {
 		err := db.InTx(ctx, func(tx pgx.Tx) error {
@@ -41,11 +42,15 @@ func TestAllocateAndInsert_AssignsSequentialIPs(t *testing.T) {
 			_, dup := addresses[p.AllowedIP.String()]
 			require.False(t, dup, "duplicate IP %s", p.AllowedIP)
 			addresses[p.AllowedIP.String()] = struct{}{}
+			allocated = append(allocated, p.AllowedIP.String())
 			return nil
 		})
 		require.NoError(t, err)
 	}
 	require.Len(t, addresses, 10)
+	require.Equal(t, "10.90.0.2/32", allocated[0])
+	require.Equal(t, "10.90.0.11/32", allocated[9])
+	require.NotContains(t, addresses, "10.90.0.1/32")
 }
 
 func TestAllocateAndInsert_RejectsDuplicateExternalID(t *testing.T) {
