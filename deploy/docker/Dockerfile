@@ -47,14 +47,30 @@ COPY --from=builder /out/awg-worker /awg-worker
 USER nonroot:nonroot
 ENTRYPOINT ["/awg-worker"]
 
+# ---- amneziawg-go (userspace) -----------------------------------------------
+FROM golang:1.26.2-alpine AS awg-go-builder
+ARG AMNEZIAWG_GO_TAG=v0.2.17
+ARG AMNEZIAWG_GO_COMMIT=12a012205e3c444be02aba91a840455f74c127e1
+RUN apk add --no-cache git make
+RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_TAG}" https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go && \
+    cd /src/amneziawg-go && \
+    test "$(git rev-parse HEAD)" = "${AMNEZIAWG_GO_COMMIT}" && \
+    make && \
+    mkdir -p /out && \
+    cp amneziawg-go /out/amneziawg-go
+RUN chmod 0755 /out/amneziawg-go && \
+    ln -s amneziawg-go /out/wireguard-go
+
 # ---- node-agent --------------------------------------------------------------
-# The node-agent ships in an image that already contains amneziawg-tools so the
-# CLIExecutor on Linux works out of the box. NOTE: the kernel module
-# `amneziawg` MUST be present on the *host* — it is not provided by this image.
+# Ships with amneziawg-tools + amneziawg-go userspace fallback. The container
+# still needs CAP_NET_ADMIN and /dev/net/tun when the kernel module is absent.
 FROM alpine:3.23 AS awg-node-agent
 RUN apk add --no-cache bash iproute2 iptables nftables openresolv ca-certificates
 COPY --from=awg-tools-builder /out/awg /usr/local/bin/awg
 COPY --from=awg-tools-builder /out/awg-quick /usr/local/bin/awg-quick
+COPY --from=awg-go-builder /out/amneziawg-go /usr/local/bin/amneziawg-go
+COPY --from=awg-go-builder /out/wireguard-go /usr/local/bin/wireguard-go
 COPY --from=builder /out/awg-node-agent /awg-node-agent
+ENV WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go
 EXPOSE 8081
 ENTRYPOINT ["/awg-node-agent"]

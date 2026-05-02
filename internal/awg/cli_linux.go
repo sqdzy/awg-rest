@@ -15,8 +15,9 @@ import (
 // CLIExecutor invokes amneziawg-tools binaries on a Linux host. It is the
 // production-mode executor used by the node-agent.
 //
-// Requirements: `awg`, `awg-quick` available in PATH; the kernel module
-// `amneziawg` must be loadable; node-agent must run as root or with
+// Requirements: `awg`, `awg-quick` available in PATH; either the kernel module
+// `amneziawg` is loadable or `awg-quick` can fall back to amneziawg-go via
+// WG_QUICK_USERSPACE_IMPLEMENTATION; node-agent must run as root or with
 // CAP_NET_ADMIN.
 type CLIExecutor struct {
 	AwgBinary      string // default: "awg"

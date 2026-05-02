@@ -220,6 +220,8 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	require.Len(t, snap, 1)
 	require.Equal(t, resp.PublicKey, snap[0].PublicKey)
 	require.Contains(t, snap[0].AllowedIPs, resp.AllowedIP)
+	require.Contains(t, resp.ClientConfig, "PrivateKey = "+resp.PrivateKey)
+	require.Contains(t, resp.ClientConfig, "Endpoint = vpn-1.test:585")
 
 	// 5) Operation is now applied.
 	opStatus := getJSON(t, client, env.Server.URL+"/v1/operations/"+resp.OperationID, bearer)

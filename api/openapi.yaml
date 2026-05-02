@@ -222,6 +222,7 @@ components:
         allowed_ip:    { type: string }
         public_key:    { type: string }
         private_key:   { type: string, description: present only on first response when the server generated the key }
+        client_config: { type: string, description: complete client configuration present only on first response when the server generated the key }
         preshared_key: { type: string }
         node_id:       { type: string, format: uuid }
         profile_id:    { type: string, format: uuid }

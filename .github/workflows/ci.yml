@@ -76,3 +76,5 @@ jobs:
         run: docker build -f deploy/docker/Dockerfile --target awg-worker -t awg-worker:ci .
       - name: build node-agent
         run: docker build -f deploy/docker/Dockerfile --target awg-node-agent -t awg-node-agent:ci .
+      - name: build all-in-one
+        run: docker build -f deploy/docker/Dockerfile.all-in-one --target awg-rest-all-in-one -t awg-rest-all-in-one:ci .

@@ -33,6 +33,7 @@ services:
       JWT_AUDIENCE: awg-control-plane
       JWT_ALLOWED_ALGS: HS256
       LOG_LEVEL: info
+      BOOTSTRAP_ENABLED: "false"
     ports:
       - "127.0.0.1:18080:18080"
 
@@ -59,9 +60,12 @@ services:
       dockerfile: deploy/docker/Dockerfile
       target: awg-node-agent
     cap_add: ["NET_ADMIN"]
+    devices:
+      - /dev/net/tun:/dev/net/tun
     environment:
       AGENT_ADDR: ":8081"
       AGENT_INSECURE_HTTP: "true"
       LOG_LEVEL: info
+      WG_QUICK_USERSPACE_IMPLEMENTATION: amneziawg-go
     ports:
       - "127.0.0.1:8081:8081"

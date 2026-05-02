@@ -10,6 +10,7 @@ import (
 
 	"github.com/awg-rest/awg-rest/internal/api"
 	"github.com/awg-rest/awg-rest/internal/auth"
+	"github.com/awg-rest/awg-rest/internal/bootstrap"
 	"github.com/awg-rest/awg-rest/internal/config"
 	"github.com/awg-rest/awg-rest/internal/obs"
 	"github.com/awg-rest/awg-rest/internal/ratelimit"
@@ -38,6 +39,10 @@ func BuildAPI(ctx context.Context, cfg *config.Config) (*Built, error) {
 	if err := repo.Migrate(ctx, db.Pool); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	if err := bootstrap.RunIfEmpty(ctx, db, bootstrap.EnvDefaults(), logger); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
 
 	svc := &api.Service{
@@ -82,6 +87,9 @@ func BuildAPI(ctx context.Context, cfg *config.Config) (*Built, error) {
 func buildJWTValidator(cfg *config.Config) (auth.Validator, error) {
 	if len(cfg.JWTPublicKeyPEM) > 0 {
 		return auth.NewStaticKeyValidatorFromPEM(cfg.JWTPublicKeyPEM, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTAllowedAlgs)
+	}
+	if len(cfg.JWTSecret) == 0 {
+		return nil, fmt.Errorf("JWT_SECRET or JWT_PUBLIC_KEY_FILE must be set")
 	}
 	return &auth.HMACValidator{
 		Secret:      cfg.JWTSecret,

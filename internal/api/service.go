@@ -62,7 +62,8 @@ type CreatePeerResponse struct {
 	Status       string `json:"status"`
 	AllowedIP    string `json:"allowed_ip"`
 	PublicKey    string `json:"public_key"`
-	PrivateKey   string `json:"private_key,omitempty"` // only when server-generated; one-time
+	PrivateKey   string `json:"private_key,omitempty"`   // only when server-generated; one-time
+	ClientConfig string `json:"client_config,omitempty"` // only when server-generated; one-time
 	PresharedKey string `json:"preshared_key,omitempty"`
 	NodeID       string `json:"node_id"`
 	ProfileID    string `json:"profile_id"`
@@ -229,11 +230,21 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			NodeID:      node.ID.String(),
 			ProfileID:   profile.ID.String(),
 		}
+		if priv != "" {
+			resp.ClientConfig = render.Client(render.ClientArgs{
+				ClientPrivateKey: priv,
+				ClientAddress:    []string{peer.AllowedIP.String()},
+				ServerPublicKey:  node.ServerPublicKey,
+				ServerEndpoint:   node.PublicEndpoint,
+				Keepalive:        25,
+			}, *profile)
+		}
 		status = http.StatusAccepted
-		// Persist a sanitized response that does NOT include the private key,
-		// so a replay never re-issues secrets.
+		// Persist a sanitized response that does NOT include one-time secret
+		// material, so a replay never re-issues client keys.
 		safe := resp
 		safe.PrivateKey = ""
+		safe.ClientConfig = ""
 		if err := s.Idem.Store(ctx, tx, tenant.ID, idemKey, hash, &op.ID, status, safe, s.idempotencyTTL()); err != nil {
 			return err
 		}

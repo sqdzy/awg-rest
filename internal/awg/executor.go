@@ -1,5 +1,5 @@
 // Package awg provides an abstraction over the AmneziaWG userspace tooling
-// (`awg`, `awg-quick`, `awg-go`). The Executor interface is implemented by:
+// (`awg`, `awg-quick`, `amneziawg-go`). The Executor interface is implemented by:
 //
 //   - CLIExecutor — invokes the real binaries on a Linux host (used by the
 //     node-agent in production).

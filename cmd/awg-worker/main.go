@@ -67,14 +67,20 @@ func main() {
 	}
 
 	w := &outbox.Worker{
-		DB:         db,
-		Outbox:     &repo.Outbox{DB: db},
-		Operations: &repo.Operations{DB: db},
-		Peers:      &repo.Peers{DB: db},
-		Profiles:   &repo.Profiles{DB: db},
-		Nodes:      &repo.Nodes{DB: db},
-		Executor:   executor,
-		Logger:     logger,
+		DB:                 db,
+		Outbox:             &repo.Outbox{DB: db},
+		Operations:         &repo.Operations{DB: db},
+		Peers:              &repo.Peers{DB: db},
+		Profiles:           &repo.Profiles{DB: db},
+		Nodes:              &repo.Nodes{DB: db},
+		Executor:           executor,
+		Logger:             logger,
+		BootstrapConfigDir: cfg.BootstrapConfigDir,
+	}
+	if cfg.ReconcileOnStart {
+		if err := w.ReconcileAll(ctx); err != nil {
+			logger.WarnContext(ctx, "startup reconcile completed with errors", "err", err)
+		}
 	}
 	logger.InfoContext(ctx, "starting worker")
 	if err := w.Run(ctx); err != nil && err != context.Canceled {

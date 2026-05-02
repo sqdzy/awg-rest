@@ -48,6 +48,7 @@ services:
       JWT_ALLOWED_ALGS: ${JWT_ALLOWED_ALGS:-RS256,ES256,EdDSA}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_JSON: "true"
+      BOOTSTRAP_ENABLED: "false"
     expose:
       - "18080"
     read_only: true
@@ -99,11 +100,14 @@ services:
       AGENT_CLIENT_CA_BUNDLE: /run/secrets/agent_client_ca
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_JSON: "true"
+      WG_QUICK_USERSPACE_IMPLEMENTATION: amneziawg-go
     expose:
       - "8081"
     ports:
       - "${AWG_UDP_PORT:-51820}:${AWG_UDP_PORT:-51820}/udp"
     cap_add: ["NET_ADMIN"]
+    devices:
+      - /dev/net/tun:/dev/net/tun
     security_opt:
       - no-new-privileges:true
     volumes:

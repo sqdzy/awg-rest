@@ -8,6 +8,7 @@ package outbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path"
 	"strings"
@@ -125,6 +126,33 @@ func (w *Worker) processJob(ctx context.Context, job *repo.Job) {
 // Used for restart sync and manual `:reconcile` API calls.
 func (w *Worker) Reconcile(ctx context.Context, nodeID uuid.UUID) error {
 	return w.applyNode(ctx, nodeID)
+}
+
+// ReconcileAll applies desired state for every registered node. It is used on
+// worker startup to restore volatile tunnel interfaces after a container or
+// host restart, even when no outbox rows are pending.
+func (w *Worker) ReconcileAll(ctx context.Context) error {
+	rows, err := w.DB.Pool.Query(ctx, `SELECT id FROM vpn_nodes ORDER BY hostname`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var joined []error
+	for rows.Next() {
+		var nodeID uuid.UUID
+		if err := rows.Scan(&nodeID); err != nil {
+			return err
+		}
+		if err := w.Reconcile(ctx, nodeID); err != nil {
+			w.Logger.WarnContext(ctx, "startup reconcile failed", "node_id", nodeID, "err", err)
+			joined = append(joined, fmt.Errorf("node %s: %w", nodeID, err))
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return errors.Join(joined...)
 }
 
 // applyNode rebuilds the rendered config from desired state and reconciles

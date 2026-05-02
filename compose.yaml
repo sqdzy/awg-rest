@@ -1,0 +1,51 @@
+services:
+  awg-rest:
+    image: ${AWG_REST_IMAGE:-ghcr.io/sqdzy/awg-rest-all-in-one:latest}
+    container_name: awg-rest
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+    environment:
+      HTTP_ADDR: ":18080"
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-awg-rest}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-awg-control-plane}
+      JWT_ALLOWED_ALGS: ${JWT_ALLOWED_ALGS:-HS256}
+      BOOTSTRAP_ENABLED: "true"
+      BOOTSTRAP_TENANT_SLUG: ${BOOTSTRAP_TENANT_SLUG:-default}
+      BOOTSTRAP_PROFILE_NAME: ${BOOTSTRAP_PROFILE_NAME:-default-v2}
+      BOOTSTRAP_NODE_REGION: ${BOOTSTRAP_NODE_REGION:-default}
+      BOOTSTRAP_NODE_HOSTNAME: ${BOOTSTRAP_NODE_HOSTNAME:-awg-node-1}
+      BOOTSTRAP_NODE_ENDPOINT: ${BOOTSTRAP_NODE_ENDPOINT:-127.0.0.1}
+      BOOTSTRAP_NODE_BASE_PORT: ${AWG_UDP_PORT:-51820}
+      BOOTSTRAP_NODE_IFACE: ${BOOTSTRAP_NODE_IFACE:-awg0}
+      BOOTSTRAP_POOL_CIDR: ${BOOTSTRAP_POOL_CIDR:-10.200.0.0/24}
+      BOOTSTRAP_CONF_DIR: /var/lib/awg-rest/bootstrap
+      BOOTSTRAP_ENABLE_NAT: ${BOOTSTRAP_ENABLE_NAT:-true}
+      BOOTSTRAP_EGRESS_IFACE: ${BOOTSTRAP_EGRESS_IFACE:-eth0}
+      RECONCILE_ON_START: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_JSON: "true"
+    ports:
+      - "${AWG_API_BIND:-127.0.0.1:18080}:18080"
+      - "${AWG_UDP_BIND:-51820}:${AWG_UDP_PORT:-51820}/udp"
+    volumes:
+      - awg-postgres:/var/lib/postgresql/data
+      - awg-state:/var/lib/awg-rest
+    networks:
+      awg-backend-internal:
+        aliases:
+          - awg-api
+
+networks:
+  awg-backend-internal:
+    name: ${AWG_INTERNAL_NETWORK:-awg-backend-internal}
+
+volumes:
+  awg-postgres:
+  awg-state:

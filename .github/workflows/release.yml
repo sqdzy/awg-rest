@@ -39,20 +39,29 @@ jobs:
       matrix:
         image:
           - name: awg-rest-api
+            file: deploy/docker/Dockerfile
             target: awg-api
             title: awg-rest API
             description: Backend-only REST API for AmneziaWG V2 peer provisioning.
             licenses: MIT
           - name: awg-rest-worker
+            file: deploy/docker/Dockerfile
             target: awg-worker
             title: awg-rest worker
             description: Durable outbox worker and reconciler for awg-rest.
             licenses: MIT
           - name: awg-rest-node-agent
+            file: deploy/docker/Dockerfile
             target: awg-node-agent
             title: awg-rest node agent
             description: Node-local AmneziaWG apply agent with bundled amneziawg-tools.
             licenses: MIT AND GPL-2.0-only
+          - name: awg-rest-all-in-one
+            file: deploy/docker/Dockerfile.all-in-one
+            target: awg-rest-all-in-one
+            title: awg-rest all-in-one
+            description: Single-node awg-rest appliance with API, worker, Postgres, and AmneziaWG userspace tooling.
+            licenses: MIT AND GPL-2.0-only AND PostgreSQL
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -121,7 +130,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: deploy/docker/Dockerfile
+          file: ${{ matrix.image.file }}
           target: ${{ matrix.image.target }}
           platforms: linux/amd64,linux/arm64
           push: ${{ steps.vars.outputs.push == 'true' }}

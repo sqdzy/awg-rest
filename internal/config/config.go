@@ -28,6 +28,12 @@ type Config struct {
 
 	NodeAgentURL string
 
+	// Embedded worker (API + worker in one process).
+	EnableEmbeddedWorker bool
+	EmbeddedWorkerExec   string // "fake" | "cli" | "remote"
+	BootstrapConfigDir   string
+	ReconcileOnStart     bool
+
 	LogLevel string
 	LogJSON  bool
 }
@@ -52,23 +58,24 @@ func Load() (*Config, error) {
 		allowedDefault = "RS256,ES256,EdDSA"
 	}
 	c := &Config{
-		HTTPAddr:        env("HTTP_ADDR", ":18080"),
-		MetricsAddr:     env("METRICS_ADDR", ":9090"),
-		DatabaseURL:     databaseURL,
-		JWTSecret:       []byte(jwtSecret),
-		JWTPublicKeyPEM: publicKeyPEM,
-		JWTIssuer:       env("JWT_ISSUER", "awg-rest"),
-		JWTAudience:     env("JWT_AUDIENCE", "awg-control-plane"),
-		JWTAllowedAlgs:  splitCSV(env("JWT_ALLOWED_ALGS", allowedDefault)),
-		IdempotencyTTL:  envDuration("IDEMPOTENCY_TTL", 24*time.Hour),
-		RateCapacity:    envInt("RATE_CAPACITY", 60),
-		RateRefillPerS:  envFloat("RATE_REFILL_PER_S", 1.0),
-		NodeAgentURL:    env("NODE_AGENT_URL", "http://127.0.0.1:8081"),
-		LogLevel:        env("LOG_LEVEL", "info"),
-		LogJSON:         envBool("LOG_JSON", true),
-	}
-	if len(c.JWTSecret) == 0 && len(c.JWTPublicKeyPEM) == 0 {
-		return nil, fmt.Errorf("JWT_SECRET or JWT_PUBLIC_KEY_FILE must be set")
+		HTTPAddr:             env("HTTP_ADDR", ":18080"),
+		MetricsAddr:          env("METRICS_ADDR", ":9090"),
+		DatabaseURL:          databaseURL,
+		JWTSecret:            []byte(jwtSecret),
+		JWTPublicKeyPEM:      publicKeyPEM,
+		JWTIssuer:            env("JWT_ISSUER", "awg-rest"),
+		JWTAudience:          env("JWT_AUDIENCE", "awg-control-plane"),
+		JWTAllowedAlgs:       splitCSV(env("JWT_ALLOWED_ALGS", allowedDefault)),
+		IdempotencyTTL:       envDuration("IDEMPOTENCY_TTL", 24*time.Hour),
+		RateCapacity:         envInt("RATE_CAPACITY", 60),
+		RateRefillPerS:       envFloat("RATE_REFILL_PER_S", 1.0),
+		NodeAgentURL:         env("NODE_AGENT_URL", "http://127.0.0.1:8081"),
+		EnableEmbeddedWorker: envBool("ENABLE_EMBEDDED_WORKER", false),
+		EmbeddedWorkerExec:   env("EMBEDDED_WORKER_EXEC", "fake"),
+		BootstrapConfigDir:   env("BOOTSTRAP_CONF_DIR", ""),
+		ReconcileOnStart:     envBool("RECONCILE_ON_START", true),
+		LogLevel:             env("LOG_LEVEL", "info"),
+		LogJSON:              envBool("LOG_JSON", true),
 	}
 	return c, nil
 }
