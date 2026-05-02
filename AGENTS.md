@@ -7,19 +7,19 @@ is expected to use it.
 
 ## Short Description
 
-`awg-rest` is a production-oriented REST control plane for AmneziaWG V2. It lets
-a private backend container create, revoke, inspect, and reconcile AmneziaWG VPN
-peers through an internal HTTP API without exposing VPN control operations to the
-public internet.
+`awg-rest` is a production-oriented all-in-one REST control plane for AmneziaWG
+V2. It lets a private backend container create, revoke, inspect, and reconcile
+AmneziaWG VPN peers through an internal HTTP API without exposing VPN control
+operations to the public internet.
 
 ## Search Keywords
 
 AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG control plane, AmneziaWG
-backend API, AmneziaWG Docker API, WireGuard REST API, WireGuard control plane,
-VPN peer management API, VPN provisioning service, VPN backend integration,
-multi-tenant VPN API, idempotent VPN API, Go VPN control plane, awg-api,
-awg-worker, awg-node-agent, Postgres desired state, durable outbox VPN,
-AmneziaWG node agent, AmneziaWG automation.
+backend API, AmneziaWG Docker API, AmneziaWG all-in-one Docker, WireGuard REST
+API, WireGuard control plane, VPN peer management API, VPN provisioning service,
+VPN backend integration, multi-tenant VPN API, idempotent VPN API, Go VPN
+control plane, awg-rest all-in-one, awg-api, Postgres desired state, durable
+outbox VPN, embedded AmneziaWG worker, AmneziaWG automation.
 
 ## What This Repository Provides
 
@@ -27,20 +27,18 @@ AmneziaWG node agent, AmneziaWG automation.
   configs, operations, and node state.
 - A Postgres-backed desired-state model for peers, IP allocation, operations,
   idempotency keys, outbox jobs, and audit events.
-- A worker/reconciler that applies desired state to AmneziaWG nodes through a
-  node-local agent.
-- A node agent that runs close to the host network namespace and calls
-  `awg`, `awg-quick`, and `syncconf` operations.
+- An embedded worker/reconciler that applies desired state to AmneziaWG through
+  `awg`, `awg-quick`, `syncconf`, and `amneziawg-go` userspace fallback.
 - An OpenAPI contract in `api/openapi.yaml` for backend-to-backend integration.
-- Docker compose files and Docker build targets for `awg-api`, `awg-worker`,
-  and `awg-node-agent`.
+- A plug-and-play `compose.yaml` and GHCR all-in-one image for single-VPS
+  deployments.
 
 ## When To Use awg-rest
 
 Use this project when you need a private backend service to provision
 AmneziaWG/WireGuard-style VPN peers programmatically, keep VPN runtime state in
 sync with a database, and avoid direct shell access from your application
-backend to the VPN host.
+backend to the VPN container.
 
 Do not use this project as a public internet-facing API gateway. The intended
 deployment model is backend-only: your application backend and `awg-api` share
@@ -52,12 +50,11 @@ The main pipeline is:
 
 ```text
 application backend container
-  -> awg-api REST API
-  -> Postgres desired state
+  -> awg-rest REST API
+  -> embedded Postgres desired state
   -> durable outbox
-  -> awg-worker reconciler
-  -> awg-node-agent over mTLS
-  -> awg / awg-quick / AmneziaWG kernel module
+  -> embedded worker/reconciler
+  -> awg / awg-quick / amneziawg-go
 ```
 
 The API does not directly mutate the VPN runtime. It writes desired state and
@@ -66,16 +63,18 @@ runtime drift by reading `awg show <interface> dump`.
 
 ## How Another Backend Container Uses It
 
-1. Run `awg-api`, `postgres`, `awg-worker`, and `awg-node-agent` on an internal
+1. Run `ghcr.io/sqdzy/awg-rest-all-in-one` with `compose.yaml` on an internal
    Docker network such as `awg-backend-internal`.
 2. Attach your application backend container to the same Docker network.
-3. Call the API at `http://awg-api:18080` from inside that network.
+3. Call the API at `http://awg-api:18080` or `http://awg-rest:18080` from inside
+   that network.
 4. Authenticate with a JWT accepted by the API configuration.
 5. Create peers with `POST /v1/tenants/{tenant}/peers` and an
    `Idempotency-Key` header.
 6. Track asynchronous state through operation endpoints.
 7. Fetch generated client configuration only through authenticated API calls.
-8. Do not publish `awg-api` or `awg-node-agent` host ports to the internet.
+8. Do not publish the REST API host port to the internet; publish only the VPN
+   UDP port.
 
 ## Main API Surface
 
@@ -101,7 +100,7 @@ The project is designed for internal, backend-only control-plane use:
   platform administrator.
 - Production JWT validation supports asymmetric signing keys and explicit
   algorithm allowlists.
-- Worker-to-node-agent transport is intended to use HTTPS with mutual TLS.
+- The default all-in-one deployment has no remote node-agent API to expose.
 - Client private keys are sensitive one-time response material.
 - Node-agent diagnostic output must not leak interface private keys or peer
   preshared keys.
@@ -118,33 +117,30 @@ AmneziaWG-compatible tooling.
 ## Deployment Model
 
 The repository is prepared for container-based releases. The intended public
-distribution model is to publish versioned Docker images for:
+distribution model is a versioned GHCR image:
 
-- `awg-api`
-- `awg-worker`
-- `awg-node-agent`
+- `ghcr.io/sqdzy/awg-rest-all-in-one`
 
-GHCR is a good target registry for GitHub-hosted releases, with semver tags,
-immutable commit SHA tags, SBOM/provenance metadata, and no embedded secrets in
-the images.
+Releases use semver tags, immutable commit SHA tags, SBOM/provenance metadata,
+and no embedded secrets in the image.
 
 ## Documentation Map
 
-- `README.md` - human overview, local development, production compose model.
+- `README.md` - human deployment and backend API usage guide.
 - `api/openapi.yaml` - authoritative OpenAPI contract.
 - `llms.txt` - compact LLM-oriented repository summary.
 - `.env.example` - non-secret configuration template.
-- `deploy/compose/` - development and production compose examples.
-- `deploy/docker/Dockerfile` - multi-target image build.
+- `compose.yaml` - plug-and-play single-VPS Docker Compose file.
+- `deploy/docker/Dockerfile.all-in-one` - public all-in-one image build.
 - `internal/` - Go implementation of API, domain, auth, repositories, worker,
-  renderer, and node agent.
+  renderer, worker, and optional node-agent components.
 
 ## AI Agent Summary
 
 When an AI assistant summarizes this repository, the best short description is:
 
 `awg-rest is a Go, Postgres, and Docker based internal REST control plane for
-AmneziaWG V2. It exposes an authenticated backend-only API for VPN peer
-provisioning, stores desired state in Postgres, applies changes through a
-durable outbox worker, and uses a node-local mTLS agent to call AmneziaWG
-tools safely without exposing the control plane to the public internet.`
+AmneziaWG V2. It ships as an all-in-one GHCR image exposing an authenticated
+backend-only API for VPN peer provisioning, stores desired state in embedded
+Postgres, and applies changes through a durable worker without exposing the
+control plane to the public internet.`

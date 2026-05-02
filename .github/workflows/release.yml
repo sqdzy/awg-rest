@@ -32,36 +32,8 @@ env:
 
 jobs:
   publish:
-    name: publish ${{ matrix.image.target }}
+    name: publish awg-rest-all-in-one
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - name: awg-rest-api
-            file: deploy/docker/Dockerfile
-            target: awg-api
-            title: awg-rest API
-            description: Backend-only REST API for AmneziaWG V2 peer provisioning.
-            licenses: MIT
-          - name: awg-rest-worker
-            file: deploy/docker/Dockerfile
-            target: awg-worker
-            title: awg-rest worker
-            description: Durable outbox worker and reconciler for awg-rest.
-            licenses: MIT
-          - name: awg-rest-node-agent
-            file: deploy/docker/Dockerfile
-            target: awg-node-agent
-            title: awg-rest node agent
-            description: Node-local AmneziaWG apply agent with bundled amneziawg-tools.
-            licenses: MIT AND GPL-2.0-only
-          - name: awg-rest-all-in-one
-            file: deploy/docker/Dockerfile.all-in-one
-            target: awg-rest-all-in-one
-            title: awg-rest all-in-one
-            description: Single-node awg-rest appliance with API, worker, Postgres, and AmneziaWG userspace tooling.
-            licenses: MIT AND GPL-2.0-only AND PostgreSQL
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -113,32 +85,32 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.name }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/awg-rest-all-in-one
           tags: |
             type=raw,value=v${{ steps.vars.outputs.version }}
             type=raw,value=${{ steps.vars.outputs.version }}
             type=sha,prefix=sha-
             type=raw,value=latest,enable=${{ steps.vars.outputs.stable == 'true' }}
           labels: |
-            org.opencontainers.image.title=${{ matrix.image.title }}
-            org.opencontainers.image.description=${{ matrix.image.description }}
+            org.opencontainers.image.title=awg-rest all-in-one
+            org.opencontainers.image.description=Single-node awg-rest appliance with API, worker, Postgres, and AmneziaWG userspace tooling.
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
-            org.opencontainers.image.licenses=${{ matrix.image.licenses }}
+            org.opencontainers.image.licenses=MIT AND GPL-2.0-only AND PostgreSQL
 
       - name: Build and publish image
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ matrix.image.file }}
-          target: ${{ matrix.image.target }}
+          file: deploy/docker/Dockerfile.all-in-one
+          target: awg-rest-all-in-one
           platforms: linux/amd64,linux/arm64
           push: ${{ steps.vars.outputs.push == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.vars.outputs.version }}
-          cache-from: type=gha,scope=${{ matrix.image.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image.target }}
+          cache-from: type=gha,scope=awg-rest-all-in-one
+          cache-to: type=gha,mode=max,scope=awg-rest-all-in-one
           sbom: true
           provenance: mode=max

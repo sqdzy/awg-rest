@@ -6,7 +6,7 @@ container.
 `awg-rest` is designed for a single private control-plane path:
 
 ```text
-your backend container -> awg-rest REST API -> Postgres -> embedded worker -> awg/amneziawg-go
+your backend container -> awg-rest REST API -> embedded Postgres -> embedded worker -> awg/amneziawg-go
 ```
 
 The default distribution is an all-in-one Docker image. It contains the API,
@@ -38,11 +38,17 @@ Edit `.env`:
 
 ```dotenv
 BOOTSTRAP_NODE_ENDPOINT=203.0.113.10
-JWT_SECRET=replace-with-at-least-32-random-bytes
+JWT_SECRET=<output-of-openssl-rand-base64-32>
 CLIENT_DNS=1.1.1.1,1.0.0.1
 AWG_API_BIND=127.0.0.1:18080
 AWG_UDP_BIND=38823
 AWG_UDP_PORT=38823
+```
+
+Generate `JWT_SECRET` with:
+
+```bash
+openssl rand -base64 32
 ```
 
 Start the stack:
@@ -205,15 +211,11 @@ Important `.env` values:
 | `BOOTSTRAP_POOL_CIDR` | VPN client address pool |
 | `AWG_INTERNAL_NETWORK` | Docker network for backend-to-API traffic |
 
-The image also supports split API/worker/node-agent deployments through the
-separate images `awg-rest-api`, `awg-rest-worker`, and `awg-rest-node-agent`,
-but the default single-VPS path is the all-in-one compose file.
-
 ## Security Notes
 
 - Keep `AWG_API_BIND=127.0.0.1:18080` unless a private reverse proxy or private
   Docker network protects it.
-- Do not publish the node-agent API.
+- Publish only the configured UDP VPN port to the internet.
 - Rotate `JWT_SECRET` if it was exposed.
 - Back up `awg-state`; losing it loses the server private key.
 - Do not delete volumes unless you want to recreate the VPN node and reissue
@@ -221,5 +223,5 @@ but the default single-VPS path is the all-in-one compose file.
 
 ## License
 
-Repository code is MIT licensed. The all-in-one and node-agent images bundle
+Repository code is MIT licensed. The all-in-one image bundles
 `amneziawg-tools`, which is GPL-2.0-only upstream software.

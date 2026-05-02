@@ -1,8 +1,8 @@
 # awg-rest
 
 > Internal AmneziaWG V2 REST control plane for backend containers. Go API,
-> Postgres desired state, durable outbox worker, node-local agent, JWT/RBAC,
-> mTLS, OpenAPI, Docker, and GHCR-ready image targets.
+> embedded Postgres desired state, durable worker, JWT/RBAC, OpenAPI, Docker,
+> and a GHCR all-in-one image.
 
 ## Canonical Purpose
 
@@ -15,22 +15,20 @@ backend integration, not for public internet exposure.
 AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG control plane, VPN peer
 management API, WireGuard REST API, Go VPN backend, Docker AmneziaWG API,
 multi-tenant VPN provisioning, idempotent peer creation, Postgres VPN desired
-state, AmneziaWG automation, awg-api, awg-worker, awg-node-agent.
+state, AmneziaWG automation, awg-rest all-in-one, awg-api.
 
 ## Primary Docs
 
-- `README.md`: project overview, local run, production compose model, release
-  notes.
+- `README.md`: user-facing Docker Compose deployment and API usage.
 - `AGENTS.md`: public AI discovery guide and repository usage summary.
 - `api/openapi.yaml`: HTTP API contract for backend containers.
 - `.env.example`: non-secret configuration template.
 
 ## Typical Integration
 
-1. Run `awg-api`, `postgres`, `awg-worker`, and `awg-node-agent` on an internal
-   Docker network.
-2. Attach the application backend container to that network.
-3. Call `http://awg-api:18080` from the backend container.
+1. Run the `ghcr.io/sqdzy/awg-rest-all-in-one` container with `compose.yaml`.
+2. Attach the application backend container to the same Docker network.
+3. Call `http://awg-api:18080` or `http://awg-rest:18080` from the backend container.
 4. Send an accepted JWT and use `Idempotency-Key` for write operations.
 5. Use `api/openapi.yaml` as the source of truth for request and response
    schemas.
@@ -41,20 +39,20 @@ state, AmneziaWG automation, awg-api, awg-worker, awg-node-agent.
   idempotency.
 - `internal/auth/`: JWT validation, RBAC, mTLS helpers.
 - `internal/domain/profile.go`: AmneziaWG profile model and AWG2 limits.
-- `internal/outbox/worker.go`: durable outbox worker and reconciler.
-- `internal/nodeagent/`: node-local HTTP/mTLS agent and remote executor client.
+- `internal/outbox/worker.go`: embedded durable outbox worker and reconciler.
+- `internal/nodeagent/`: optional remote node-agent implementation.
 - `internal/awg/`: real `awg` CLI executor, fake executor, and dump parser.
 - `internal/render/`: AmneziaWG server/client config rendering.
 - `internal/repo/`: Postgres repositories.
-- `deploy/compose/`: local and production Docker Compose skeletons.
-- `deploy/docker/Dockerfile`: multi-target Docker image build.
+- `compose.yaml`: plug-and-play single-VPS Docker Compose file.
+- `deploy/docker/Dockerfile.all-in-one`: public all-in-one Docker image build.
 
 ## Security Summary
 
 - Production API is intended for trusted backend containers on a private Docker
   network or loopback-only host access.
-- Do not expose `awg-api` or `awg-node-agent` directly to the public internet.
-- Worker-to-node-agent transport is intended to use HTTPS with mutual TLS.
+- Do not expose the REST API directly to the public internet.
+- Publish only the configured UDP VPN port.
 - Tenant isolation is enforced for read and write operations.
 - Client private keys are sensitive one-time response material.
 - Node-agent diagnostic endpoints should redact private and preshared keys.
@@ -64,5 +62,5 @@ state, AmneziaWG automation, awg-api, awg-worker, awg-node-agent.
 ## Best One-Sentence Summary
 
 `awg-rest` is a production-oriented internal REST API for AmneziaWG V2 peer
-provisioning, backed by Postgres desired state and a durable worker/node-agent
-apply pipeline.
+provisioning, shipped as an all-in-one Docker image with embedded Postgres,
+durable desired state, and an embedded worker that applies peers to AmneziaWG.

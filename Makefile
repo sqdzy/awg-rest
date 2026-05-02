@@ -47,29 +47,18 @@ tidy:
 
 .PHONY: docker
 docker:
-	docker build -f deploy/docker/Dockerfile --target awg-api        -t awg-rest/awg-api:dev .
-	docker build -f deploy/docker/Dockerfile --target awg-worker     -t awg-rest/awg-worker:dev .
-	docker build -f deploy/docker/Dockerfile --target awg-node-agent -t awg-rest/awg-node-agent:dev .
+	docker build -f deploy/docker/Dockerfile.all-in-one --target awg-rest-all-in-one -t awg-rest/all-in-one:dev .
 
 .PHONY: docker-all-in-one
-docker-all-in-one:
-	docker build -f deploy/docker/Dockerfile.all-in-one -t awg-rest/all-in-one:dev .
+docker-all-in-one: docker
 
 .PHONY: compose-up
 compose-up:
-	docker compose -f deploy/compose/docker-compose.yml up --build
+	docker compose up -d
 
 .PHONY: compose-down
 compose-down:
-	docker compose -f deploy/compose/docker-compose.yml down -v
-
-.PHONY: compose-prod-up
-compose-prod-up:
-	docker compose -f deploy/compose/docker-compose.prod.yml up -d
-
-.PHONY: compose-prod-down
-compose-prod-down:
-	docker compose -f deploy/compose/docker-compose.prod.yml down -v
+	docker compose down -v
 
 .PHONY: clean
 clean:
