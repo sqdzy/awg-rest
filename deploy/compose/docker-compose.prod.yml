@@ -104,7 +104,7 @@ services:
     expose:
       - "8081"
     ports:
-      - "${AWG_UDP_PORT:-51820}:${AWG_UDP_PORT:-51820}/udp"
+      - "${AWG_UDP_PORT:-38823}:${AWG_UDP_PORT:-38823}/udp"
     cap_add: ["NET_ADMIN"]
     devices:
       - /dev/net/tun:/dev/net/tun

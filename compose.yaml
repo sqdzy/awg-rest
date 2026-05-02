@@ -23,7 +23,7 @@ services:
       BOOTSTRAP_NODE_REGION: ${BOOTSTRAP_NODE_REGION:-default}
       BOOTSTRAP_NODE_HOSTNAME: ${BOOTSTRAP_NODE_HOSTNAME:-awg-node-1}
       BOOTSTRAP_NODE_ENDPOINT: ${BOOTSTRAP_NODE_ENDPOINT:-127.0.0.1}
-      BOOTSTRAP_NODE_BASE_PORT: ${AWG_UDP_PORT:-51820}
+      BOOTSTRAP_NODE_BASE_PORT: ${AWG_UDP_PORT:-38823}
       BOOTSTRAP_NODE_IFACE: ${BOOTSTRAP_NODE_IFACE:-awg0}
       BOOTSTRAP_POOL_CIDR: ${BOOTSTRAP_POOL_CIDR:-10.200.0.0/24}
       BOOTSTRAP_CONF_DIR: /var/lib/awg-rest/bootstrap
@@ -34,7 +34,7 @@ services:
       LOG_JSON: "true"
     ports:
       - "${AWG_API_BIND:-127.0.0.1:18080}:18080"
-      - "${AWG_UDP_BIND:-51820}:${AWG_UDP_PORT:-51820}/udp"
+      - "${AWG_UDP_BIND:-38823}:${AWG_UDP_PORT:-38823}/udp"
     volumes:
       - awg-postgres:/var/lib/postgresql/data
       - awg-state:/var/lib/awg-rest

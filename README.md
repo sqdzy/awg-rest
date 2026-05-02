@@ -20,7 +20,7 @@ port.
 
 - Linux VPS with Docker Engine and Docker Compose.
 - `/dev/net/tun` available on the host.
-- UDP port `51820` open in the VPS firewall, or the port you configure.
+- UDP port `38823` open in the VPS firewall, or the port you configure.
 - Public IP or DNS name for generated client configs.
 
 The all-in-one image still needs `NET_ADMIN` and `/dev/net/tun` because the VPN
@@ -41,8 +41,8 @@ BOOTSTRAP_NODE_ENDPOINT=203.0.113.10
 JWT_SECRET=replace-with-at-least-32-random-bytes
 CLIENT_DNS=1.1.1.1,1.0.0.1
 AWG_API_BIND=127.0.0.1:18080
-AWG_UDP_BIND=51820
-AWG_UDP_PORT=51820
+AWG_UDP_BIND=38823
+AWG_UDP_PORT=38823
 ```
 
 Start the stack:
@@ -56,7 +56,7 @@ What starts:
 - `awg-rest` on the internal Docker network `awg-backend-internal`
 - REST API on `http://awg-rest:18080` inside Docker
 - optional host-local API access on `127.0.0.1:18080`
-- VPN UDP listener on `51820/udp`
+- VPN UDP listener on `38823/udp`
 - persistent volumes `awg-postgres` and `awg-state`
 
 On first start, the container creates:
@@ -73,7 +73,9 @@ server address is `10.200.0.1/24` and generated peers start from
 
 The default `default-v2` profile uses AmneziaWG V2 parameters compatible with
 current AmneziaVPN clients, including `Jmin=10`, `Jmax=50`, `S1-S4`, and
-non-overlapping `H1-H4` ranges below `2147483647`.
+non-overlapping `H1-H4` ranges below `2147483647`. It also renders the same
+default `I1` special junk packet used by the Amnezia client for new AWG
+profiles.
 
 Back up both Docker volumes. `awg-state` contains the server private key.
 

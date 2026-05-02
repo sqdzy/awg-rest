@@ -22,6 +22,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const (
+	defaultNodeBasePort = 38823
+	defaultSpecialJunk1 = "<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>"
+)
+
 // Defaults holds the seed configuration driven by environment variables.
 type Defaults struct {
 	Enabled          bool
@@ -47,7 +52,7 @@ func EnvDefaults() Defaults {
 		NodeRegion:       env("BOOTSTRAP_NODE_REGION", "default"),
 		NodeHostname:     env("BOOTSTRAP_NODE_HOSTNAME", "awg-node-1"),
 		NodeEndpoint:     env("BOOTSTRAP_NODE_ENDPOINT", "127.0.0.1"),
-		NodeBasePort:     envInt("BOOTSTRAP_NODE_BASE_PORT", 51820),
+		NodeBasePort:     envInt("BOOTSTRAP_NODE_BASE_PORT", defaultNodeBasePort),
 		NodeIface:        env("BOOTSTRAP_NODE_IFACE", "awg0"),
 		PoolCIDR:         env("BOOTSTRAP_POOL_CIDR", "10.200.0.0/24"),
 		BootstrapConfDir: env("BOOTSTRAP_CONF_DIR", ""),
@@ -111,6 +116,7 @@ func RunIfEmpty(ctx context.Context, db *repo.DB, d Defaults, logger *slog.Logge
 		H2:               domain.IntRange{Min: 2027388662, Max: 2115196205},
 		H3:               domain.IntRange{Min: 2144626841, Max: 2145335687},
 		H4:               domain.IntRange{Min: 2146302274, Max: 2147385353},
+		I1:               defaultSpecialJunk1,
 		ListenPortPolicy: "fixed",
 	})
 	if err != nil {

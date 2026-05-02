@@ -7,7 +7,7 @@
 # Run:
 #   docker run --rm -it \
 #     --cap-add=NET_ADMIN --device=/dev/net/tun \
-#     -p 127.0.0.1:18080:18080 -p 51820:51820/udp \
+#     -p 127.0.0.1:18080:18080 -p 38823:38823/udp \
 #     -e JWT_SECRET=change-me-in-production \
 #     -e BOOTSTRAP_NODE_ENDPOINT=1.2.3.4 \
 #     awg-rest/all-in-one
@@ -94,7 +94,7 @@ ENV WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go
 # TUN device is required for userspace mode.
 # Use: docker run --cap-add=NET_ADMIN --device=/dev/net/tun ...
 EXPOSE 18080/tcp
-EXPOSE 51820/udp
+EXPOSE 38823/udp
 VOLUME ["/var/lib/postgresql/data", "/var/lib/awg-rest"]
 
 ENTRYPOINT ["/entrypoint.sh"]

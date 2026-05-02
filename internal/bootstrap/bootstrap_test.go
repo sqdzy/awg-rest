@@ -25,6 +25,14 @@ func TestEndpointWithPort(t *testing.T) {
 	}
 }
 
+func TestEnvDefaultsUsesNonStandardAWGPort(t *testing.T) {
+	t.Setenv("BOOTSTRAP_NODE_BASE_PORT", "")
+	got := EnvDefaults()
+	if got.NodeBasePort != defaultNodeBasePort {
+		t.Fatalf("NodeBasePort = %d, want %d", got.NodeBasePort, defaultNodeBasePort)
+	}
+}
+
 func TestServerAddressFromPool(t *testing.T) {
 	pool := netip.MustParsePrefix("10.200.0.0/24")
 	got, err := serverAddressFromPool(pool)
@@ -52,6 +60,7 @@ func TestWriteBootstrapConfIncludesPrivateKeyAndNAT(t *testing.T) {
 		H2:               domain.IntRange{Min: 2000, Max: 2000},
 		H3:               domain.IntRange{Min: 3000, Max: 3000},
 		H4:               domain.IntRange{Min: 4000, Max: 4000},
+		I1:               defaultSpecialJunk1,
 		ListenPortPolicy: "fixed",
 	}
 	err := writeBootstrapConf(Defaults{
@@ -75,6 +84,7 @@ func TestWriteBootstrapConfIncludesPrivateKeyAndNAT(t *testing.T) {
 		"PrivateKey = server-private-key",
 		"Address = 10.200.0.1/24",
 		"ListenPort = 51820",
+		"I1 = " + defaultSpecialJunk1,
 		"iptables -t nat -C POSTROUTING -s 10.200.0.0/24 -o eth0 -j MASQUERADE",
 	} {
 		if !strings.Contains(cfg, want) {
