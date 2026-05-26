@@ -9,7 +9,6 @@ package render
 
 import (
 	"fmt"
-	"net/netip"
 	"sort"
 	"strings"
 
@@ -29,12 +28,12 @@ type Interface struct {
 
 // PeerEntry is a single [Peer] block on the server side.
 type PeerEntry struct {
-	PublicKey    string
-	PresharedKey string
-	AllowedIPs   []string
-	Endpoint     string
-	Keepalive    int
-	Comment      string // optional human-readable label as a # comment
+	PublicKey      string
+	PresharedKey   string
+	AllowedIPs     []string
+	Endpoint       string
+	Keepalive      int
+	Comment        string // optional human-readable label as a # comment
 }
 
 // Server renders the full server configuration. Peers are deterministically
@@ -98,14 +97,11 @@ type ClientArgs struct {
 	DNS              []string
 	MTU              int
 
-	ServerPublicKey string
-	ServerEndpoint  string // host:port
-	PresharedKey    string
+	ServerPublicKey  string
+	ServerEndpoint   string // host:port
+	PresharedKey     string
 
-	// AllowedIPs controls which destination CIDRs the client routes through the
-	// tunnel. When empty, Client derives a full-tunnel default for the address
-	// families assigned to ClientAddress.
-	AllowedIPs []string
+	AllowedIPs []string // typically 0.0.0.0/0, ::/0
 	Keepalive  int
 }
 
@@ -136,7 +132,7 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 	}
 	allowed := args.AllowedIPs
 	if len(allowed) == 0 {
-		allowed = defaultClientAllowedIPs(args.ClientAddress)
+		allowed = []string{"0.0.0.0/0", "::/0"}
 	}
 	fmt.Fprintf(&b, "AllowedIPs = %s\n", strings.Join(allowed, ", "))
 	fmt.Fprintf(&b, "Endpoint = %s\n", args.ServerEndpoint)
@@ -144,33 +140,6 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 		fmt.Fprintf(&b, "PersistentKeepalive = %d\n", args.Keepalive)
 	}
 	return b.String()
-}
-
-func defaultClientAllowedIPs(addresses []string) []string {
-	has4 := false
-	has6 := false
-	for _, raw := range addresses {
-		prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
-		if err != nil {
-			continue
-		}
-		if prefix.Addr().Is4() {
-			has4 = true
-		} else if prefix.Addr().Is6() {
-			has6 = true
-		}
-	}
-	if !has4 && !has6 {
-		return []string{"0.0.0.0/0"}
-	}
-	allowed := make([]string, 0, 2)
-	if has4 {
-		allowed = append(allowed, "0.0.0.0/0")
-	}
-	if has6 {
-		allowed = append(allowed, "::/0")
-	}
-	return allowed
 }
 
 func writeProfile(b *strings.Builder, p domain.ProtocolProfile) {

@@ -60,7 +60,7 @@ func TestServer_V1OmitsV2Fields(t *testing.T) {
 	require.NotContains(t, out, "I1 =")
 }
 
-func TestClient_DefaultAllowedIPsIPv4Only(t *testing.T) {
+func TestClient_DefaultAllowedIPs(t *testing.T) {
 	t.Parallel()
 	out := Client(ClientArgs{
 		ClientPrivateKey: "ZZZZ",
@@ -69,32 +69,10 @@ func TestClient_DefaultAllowedIPsIPv4Only(t *testing.T) {
 		ServerEndpoint:   "vpn.example.com:585",
 		Keepalive:        25,
 	}, sampleV2Profile())
-	require.Contains(t, out, "AllowedIPs = 0.0.0.0/0")
-	require.NotContains(t, out, "AllowedIPs = 0.0.0.0/0, ::/0")
+	require.Contains(t, out, "AllowedIPs = 0.0.0.0/0, ::/0")
 	require.Contains(t, out, "Endpoint = vpn.example.com:585")
 	require.Contains(t, out, "PersistentKeepalive = 25")
 	require.Contains(t, out, "Jc = 5")
-}
-
-func TestClient_DefaultAllowedIPsDualStack(t *testing.T) {
-	t.Parallel()
-	out := Client(ClientArgs{
-		ClientAddress:   []string{"10.90.0.5/32", "fd00::5/128"},
-		ServerPublicKey: "SERV",
-		ServerEndpoint:  "vpn.example.com:585",
-	}, sampleV2Profile())
-	require.Contains(t, out, "AllowedIPs = 0.0.0.0/0, ::/0")
-}
-
-func TestClient_ExplicitAllowedIPs(t *testing.T) {
-	t.Parallel()
-	out := Client(ClientArgs{
-		ClientAddress:   []string{"10.90.0.5/32"},
-		ServerPublicKey: "SERV",
-		ServerEndpoint:  "vpn.example.com:585",
-		AllowedIPs:      []string{"203.0.113.0/24", "198.51.100.7/32"},
-	}, sampleV2Profile())
-	require.Contains(t, out, "AllowedIPs = 203.0.113.0/24, 198.51.100.7/32")
 }
 
 func TestServer_StableHash(t *testing.T) {

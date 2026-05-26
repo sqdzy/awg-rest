@@ -162,10 +162,6 @@ The first create response includes one-time secret material:
 Store `client_config` in your backend and deliver it to the user once. It is not
 returned again on idempotency replay.
 
-Generated client configs default to `AllowedIPs = 0.0.0.0/0` for the standard
-IPv4 pool. Set `CLIENT_ALLOWED_IPS` if you need a narrower client-side route
-list for split-tunnel delivery.
-
 Poll the operation:
 
 ```bash
@@ -208,7 +204,6 @@ Important `.env` values:
 | `AWG_REST_IMAGE` | all-in-one image tag |
 | `BOOTSTRAP_NODE_ENDPOINT` | public IP or DNS name placed into client configs |
 | `CLIENT_DNS` | comma-separated DNS servers rendered into generated client configs |
-| `CLIENT_ALLOWED_IPS` | optional comma-separated client-side routes rendered as `AllowedIPs`; empty uses full-tunnel for the issued address family |
 | `JWT_SECRET` | HMAC signing secret shared only with your backend |
 | `AWG_API_BIND` | host binding for REST API, keep loopback-only |
 | `AWG_UDP_BIND` | host UDP binding for VPN traffic |
