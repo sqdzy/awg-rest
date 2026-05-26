@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  GO_VERSION: "1.25.9"
+  GO_VERSION: "1.25.10"
   TESTCONTAINERS_RYUK_DISABLED: "true"
 
 permissions:
