@@ -46,17 +46,18 @@ func BuildAPI(ctx context.Context, cfg *config.Config) (*Built, error) {
 	}
 
 	svc := &api.Service{
-		DB:             db,
-		Tenants:        &repo.Tenants{DB: db},
-		Nodes:          &repo.Nodes{DB: db},
-		Profiles:       &repo.Profiles{DB: db},
-		Peers:          &repo.Peers{DB: db},
-		Operations:     &repo.Operations{DB: db},
-		Outbox:         &repo.Outbox{DB: db},
-		Idem:           &repo.Idempotency{DB: db},
-		Audit:          &repo.Audit{DB: db},
-		IdempotencyTTL: cfg.IdempotencyTTL,
-		ClientDNS:      cfg.ClientDNS,
+		DB:               db,
+		Tenants:          &repo.Tenants{DB: db},
+		Nodes:            &repo.Nodes{DB: db},
+		Profiles:         &repo.Profiles{DB: db},
+		Peers:            &repo.Peers{DB: db},
+		Operations:       &repo.Operations{DB: db},
+		Outbox:           &repo.Outbox{DB: db},
+		Idem:             &repo.Idempotency{DB: db},
+		Audit:            &repo.Audit{DB: db},
+		IdempotencyTTL:   cfg.IdempotencyTTL,
+		ClientDNS:        cfg.ClientDNS,
+		ClientAllowedIPs: cfg.ClientAllowedIPs,
 	}
 	handlers := &api.Handlers{Service: svc}
 	validator, err := buildJWTValidator(cfg)

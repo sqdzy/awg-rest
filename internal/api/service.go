@@ -22,17 +22,18 @@ import (
 // Service is the application service for HTTP handlers. It composes the
 // repositories and enforces business rules (idempotency, audit, outbox).
 type Service struct {
-	DB             *repo.DB
-	Tenants        *repo.Tenants
-	Nodes          *repo.Nodes
-	Profiles       *repo.Profiles
-	Peers          *repo.Peers
-	Operations     *repo.Operations
-	Outbox         *repo.Outbox
-	Idem           *repo.Idempotency
-	Audit          *repo.Audit
-	IdempotencyTTL time.Duration
-	ClientDNS      []string
+	DB               *repo.DB
+	Tenants          *repo.Tenants
+	Nodes            *repo.Nodes
+	Profiles         *repo.Profiles
+	Peers            *repo.Peers
+	Operations       *repo.Operations
+	Outbox           *repo.Outbox
+	Idem             *repo.Idempotency
+	Audit            *repo.Audit
+	IdempotencyTTL   time.Duration
+	ClientDNS        []string
+	ClientAllowedIPs []string
 
 	// Now is used for tests.
 	Now func() time.Time
@@ -239,6 +240,7 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 				ServerPublicKey:  node.ServerPublicKey,
 				ServerEndpoint:   node.PublicEndpoint,
 				Keepalive:        25,
+				AllowedIPs:       s.ClientAllowedIPs,
 			}, *profile)
 		}
 		status = http.StatusAccepted
@@ -409,6 +411,7 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 		ServerPublicKey: node.ServerPublicKey,
 		ServerEndpoint:  node.PublicEndpoint,
 		Keepalive:       25,
+		AllowedIPs:      s.ClientAllowedIPs,
 	}, *profile)
 	return out, nil
 }

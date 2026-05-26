@@ -33,3 +33,11 @@ func TestLoadTrimsJWTSecretFileWhitespace(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("secret-with-newline"), cfg.JWTSecret)
 }
+
+func TestLoadClientAllowedIPs(t *testing.T) {
+	t.Setenv("CLIENT_ALLOWED_IPS", "10.0.0.0/8, 203.0.113.7/32")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, []string{"10.0.0.0/8", "203.0.113.7/32"}, cfg.ClientAllowedIPs)
+}
