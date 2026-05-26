@@ -56,3 +56,34 @@ func WithInterfaceValue(config, key, value string) string {
 func PreserveInterfacePrivateKey(config, currentConfig string) string {
 	return WithInterfaceValue(config, "PrivateKey", InterfaceValue(currentConfig, "PrivateKey"))
 }
+
+// sanitizeSyncConf removes empty optional AmneziaWG V2 special-junk keys before
+// feeding stripped config into `awg syncconf`. amneziawg-tools accepts blank
+// I1-I5 in client-style files, but `awg syncconf` rejects lines such as `I2=`.
+func sanitizeSyncConf(config string) string {
+	var b strings.Builder
+	for _, raw := range strings.SplitAfter(config, "\n") {
+		if isEmptySpecialJunkLine(raw) {
+			continue
+		}
+		b.WriteString(raw)
+	}
+	return b.String()
+}
+
+func isEmptySpecialJunkLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return false
+	}
+	key, value, ok := strings.Cut(line, "=")
+	if !ok {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "i1", "i2", "i3", "i4", "i5":
+		return strings.TrimSpace(value) == ""
+	default:
+		return false
+	}
+}

@@ -91,6 +91,7 @@ func (c *CLIExecutor) SyncConf(ctx context.Context, iface, config string) error 
 	if err != nil {
 		return err
 	}
+	stripped = sanitizeSyncConf(stripped)
 	tmp, err := os.CreateTemp(c.RenderedDir, iface+"-stripped-*.conf")
 	if err != nil {
 		return err

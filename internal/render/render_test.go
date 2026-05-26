@@ -18,6 +18,7 @@ func sampleV2Profile() domain.ProtocolProfile {
 		H2: domain.IntRange{Min: 420000, Max: 620000},
 		H3: domain.IntRange{Min: 720000, Max: 920000},
 		H4: domain.IntRange{Min: 1020000, Max: 1220000},
+		I1: "<packet>",
 	}
 }
 
@@ -37,8 +38,9 @@ func TestServer_RendersV2Profile(t *testing.T) {
 	require.Contains(t, out, "Jc = 5")
 	require.Contains(t, out, "S3 = 0") // V2 only
 	require.Contains(t, out, "H1 = 120000-320000")
-	require.Contains(t, out, "I1 = ")
-	require.Contains(t, out, "I5 = ")
+	require.Contains(t, out, "I1 = <packet>")
+	require.NotContains(t, out, "I2 =")
+	require.NotContains(t, out, "I5 =")
 
 	// Peers must be ordered by public key for deterministic hashing.
 	idx1 := strings.Index(out, "PublicKey = PEER1")
@@ -85,7 +87,9 @@ func TestClient_DefaultAllowedIPs(t *testing.T) {
 	require.Contains(t, out, "PresharedKey = PSK1")
 	require.Contains(t, out, "PersistentKeepalive = 25")
 	require.Contains(t, out, "Jc = 5")
+	require.Contains(t, out, "I1 = <packet>")
 	require.Contains(t, out, "I2 = ")
+	require.Contains(t, out, "I5 = ")
 }
 
 func TestServer_StableHash(t *testing.T) {

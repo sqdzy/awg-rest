@@ -27,3 +27,16 @@ func TestPreserveInterfacePrivateKeyKeepsExisting(t *testing.T) {
 	require.Contains(t, got, "PrivateKey = desired-private")
 	require.NotContains(t, got, "current-private")
 }
+
+func TestSanitizeSyncConfDropsEmptySpecialJunk(t *testing.T) {
+	t.Parallel()
+	input := "[Interface]\nS4 = 18\nI1 = <packet>\nI2=\nI3 = \nI4 = value\n# I5 = \n\n[Peer]\nPublicKey = peer\n"
+
+	got := sanitizeSyncConf(input)
+
+	require.Contains(t, got, "I1 = <packet>")
+	require.Contains(t, got, "I4 = value")
+	require.Contains(t, got, "# I5 = ")
+	require.NotContains(t, got, "I2=")
+	require.NotContains(t, got, "I3 = ")
+}

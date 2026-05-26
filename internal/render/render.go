@@ -63,7 +63,7 @@ func Server(iface Interface, profile domain.ProtocolProfile, peers []PeerEntry) 
 	if iface.PostDown != "" {
 		fmt.Fprintf(&b, "PostDown = %s\n", iface.PostDown)
 	}
-	writeProfile(&b, profile)
+	writeProfile(&b, profile, false)
 
 	sorted := append([]PeerEntry(nil), peers...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].PublicKey < sorted[j].PublicKey })
@@ -123,7 +123,7 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 	if args.MTU > 0 {
 		fmt.Fprintf(&b, "MTU = %d\n", args.MTU)
 	}
-	writeProfile(&b, profile)
+	writeProfile(&b, profile, true)
 
 	b.WriteString("\n[Peer]\n")
 	fmt.Fprintf(&b, "PublicKey = %s\n", args.ServerPublicKey)
@@ -142,7 +142,7 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 	return b.String()
 }
 
-func writeProfile(b *strings.Builder, p domain.ProtocolProfile) {
+func writeProfile(b *strings.Builder, p domain.ProtocolProfile, includeEmptySpecialJunk bool) {
 	fmt.Fprintf(b, "Jc = %d\n", p.Jc)
 	fmt.Fprintf(b, "Jmin = %d\n", p.Jmin)
 	fmt.Fprintf(b, "Jmax = %d\n", p.Jmax)
@@ -157,10 +157,17 @@ func writeProfile(b *strings.Builder, p domain.ProtocolProfile) {
 	fmt.Fprintf(b, "H3 = %s\n", p.H3.String())
 	fmt.Fprintf(b, "H4 = %s\n", p.H4.String())
 	if p.IsV2() {
-		fmt.Fprintf(b, "I1 = %s\n", p.I1)
-		fmt.Fprintf(b, "I2 = %s\n", p.I2)
-		fmt.Fprintf(b, "I3 = %s\n", p.I3)
-		fmt.Fprintf(b, "I4 = %s\n", p.I4)
-		fmt.Fprintf(b, "I5 = %s\n", p.I5)
+		writeSpecialJunk(b, "I1", p.I1, includeEmptySpecialJunk)
+		writeSpecialJunk(b, "I2", p.I2, includeEmptySpecialJunk)
+		writeSpecialJunk(b, "I3", p.I3, includeEmptySpecialJunk)
+		writeSpecialJunk(b, "I4", p.I4, includeEmptySpecialJunk)
+		writeSpecialJunk(b, "I5", p.I5, includeEmptySpecialJunk)
 	}
+}
+
+func writeSpecialJunk(b *strings.Builder, key, value string, includeEmpty bool) {
+	if value == "" && !includeEmpty {
+		return
+	}
+	fmt.Fprintf(b, "%s = %s\n", key, value)
 }
