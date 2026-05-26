@@ -40,8 +40,8 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amn
 
 # ---- amneziawg-go builder ----------------------------------------------------
 FROM golang:1.26.3-alpine AS awg-go-builder
-ARG AMNEZIAWG_GO_TAG=v0.2.17
-ARG AMNEZIAWG_GO_COMMIT=12a012205e3c444be02aba91a840455f74c127e1
+ARG AMNEZIAWG_GO_TAG=v0.2.18
+ARG AMNEZIAWG_GO_COMMIT=f4f4c999267437c3eb909e8d0e5278fb4596d9a7
 RUN apk add --no-cache git make
 RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_TAG}" https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go && \
     cd /src/amneziawg-go && \

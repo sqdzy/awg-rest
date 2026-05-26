@@ -68,6 +68,7 @@ func TestE2E_RemoteAgentPipeline(t *testing.T) {
 	require.Len(t, peers, 1)
 	require.Equal(t, cr.PublicKey, peers[0].PublicKey)
 	require.Equal(t, cr.PresharedKey, peers[0].PresharedKey)
+	require.Zero(t, peers[0].KeepaliveSecs)
 }
 
 // silence unused import for build configurations where this is the only file.

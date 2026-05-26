@@ -190,7 +190,6 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 			PublicKey:    p.PublicKey,
 			PresharedKey: peerPresharedKey(p),
 			AllowedIPs:   []string{p.AllowedIP.String()},
-			Keepalive:    25,
 			Comment:      p.DisplayName,
 		})
 	}
