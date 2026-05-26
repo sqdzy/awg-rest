@@ -191,6 +191,7 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	require.NotEmpty(t, resp.OperationID)
 	require.NotEmpty(t, resp.PeerID)
 	require.NotEmpty(t, resp.PrivateKey, "first response must include the one-time private key")
+	require.NotEmpty(t, resp.PresharedKey, "first response must include the one-time preshared key")
 	require.NotEmpty(t, resp.PublicKey)
 	require.True(t, strings.HasPrefix(resp.AllowedIP, "10.90.0."))
 
@@ -202,6 +203,7 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	require.NoError(t, json.NewDecoder(replay.Body).Decode(&rep))
 	require.Equal(t, resp.PeerID, rep.PeerID)
 	require.Empty(t, rep.PrivateKey, "replays MUST NOT re-issue private keys")
+	require.Empty(t, rep.PresharedKey, "replays MUST NOT re-issue preshared keys")
 
 	// 3) Idempotency conflict: same key, different body -> 409.
 	conflictBody := map[string]any{
@@ -220,8 +222,10 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	snap := env.Executor.Snapshot("awg0")
 	require.Len(t, snap, 1)
 	require.Equal(t, resp.PublicKey, snap[0].PublicKey)
+	require.Equal(t, resp.PresharedKey, snap[0].PresharedKey)
 	require.Contains(t, snap[0].AllowedIPs, resp.AllowedIP)
 	require.Contains(t, resp.ClientConfig, "PrivateKey = "+resp.PrivateKey)
+	require.Contains(t, resp.ClientConfig, "PresharedKey = "+resp.PresharedKey)
 	require.Contains(t, resp.ClientConfig, "Endpoint = vpn-1.test:585")
 
 	// 5) Operation is now applied.
@@ -244,7 +248,9 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	require.Contains(t, cfgBody, "Endpoint = vpn-1.test:585")
 	require.Contains(t, cfgBody, "Jc = 5") // V2 profile fields rendered for client
 	require.Contains(t, cfgBody, "H1 = 1000-2000")
+	require.Contains(t, cfgBody, "I5 = ")
 	require.NotContains(t, cfgBody, "PrivateKey =")
+	require.NotContains(t, cfgBody, "PresharedKey =")
 
 	leakyCfg := getJSON(t, client,
 		env.Server.URL+"/v1/tenants/acme/peers/"+resp.PeerID+"/configuration?client_private_key=SECRET", bearer)

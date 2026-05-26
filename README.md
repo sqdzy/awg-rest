@@ -158,6 +158,7 @@ The first create response includes one-time secret material:
 
 - `private_key`
 - `client_config`
+- `preshared_key`
 
 Store `client_config` in your backend and deliver it to the user once. It is not
 returned again on idempotency replay.

@@ -187,10 +187,11 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 			continue
 		}
 		entries = append(entries, render.PeerEntry{
-			PublicKey:  p.PublicKey,
-			AllowedIPs: []string{p.AllowedIP.String()},
-			Keepalive:  25,
-			Comment:    p.DisplayName,
+			PublicKey:    p.PublicKey,
+			PresharedKey: peerPresharedKey(p),
+			AllowedIPs:   []string{p.AllowedIP.String()},
+			Keepalive:    25,
+			Comment:      p.DisplayName,
 		})
 	}
 
@@ -221,6 +222,13 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 		return fmt.Errorf("runtime public key mismatch for %s: got %q want %q", node.InterfaceName, iface.PublicKey, node.ServerPublicKey)
 	}
 	return w.persistRuntime(ctx, peers, runtimePeers)
+}
+
+func peerPresharedKey(p domain.Peer) string {
+	if p.PresharedKeyRef == nil {
+		return ""
+	}
+	return *p.PresharedKeyRef
 }
 
 func (w *Worker) preserveRuntimePrivateKey(ctx context.Context, iface, cfg string) string {

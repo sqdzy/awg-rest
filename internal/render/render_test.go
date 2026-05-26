@@ -37,12 +37,22 @@ func TestServer_RendersV2Profile(t *testing.T) {
 	require.Contains(t, out, "Jc = 5")
 	require.Contains(t, out, "S3 = 0") // V2 only
 	require.Contains(t, out, "H1 = 120000-320000")
+	require.Contains(t, out, "I1 = ")
+	require.Contains(t, out, "I5 = ")
 
 	// Peers must be ordered by public key for deterministic hashing.
 	idx1 := strings.Index(out, "PublicKey = PEER1")
 	idx2 := strings.Index(out, "PublicKey = PEER2")
 	require.True(t, idx1 < idx2 && idx1 > 0, "peers must be ordered by public key")
 	require.Contains(t, out, "PersistentKeepalive = 25")
+}
+
+func TestServer_RendersPeerPresharedKey(t *testing.T) {
+	t.Parallel()
+	out := Server(Interface{ListenPort: 585}, sampleV2Profile(), []PeerEntry{
+		{PublicKey: "PEER1", PresharedKey: "PSK1", AllowedIPs: []string{"10.90.0.2/32"}},
+	})
+	require.Contains(t, out, "PresharedKey = PSK1")
 }
 
 func TestServer_V1OmitsV2Fields(t *testing.T) {
@@ -67,12 +77,15 @@ func TestClient_DefaultAllowedIPs(t *testing.T) {
 		ClientAddress:    []string{"10.90.0.5/32"},
 		ServerPublicKey:  "SERV",
 		ServerEndpoint:   "vpn.example.com:585",
+		PresharedKey:     "PSK1",
 		Keepalive:        25,
 	}, sampleV2Profile())
 	require.Contains(t, out, "AllowedIPs = 0.0.0.0/0, ::/0")
 	require.Contains(t, out, "Endpoint = vpn.example.com:585")
+	require.Contains(t, out, "PresharedKey = PSK1")
 	require.Contains(t, out, "PersistentKeepalive = 25")
 	require.Contains(t, out, "Jc = 5")
+	require.Contains(t, out, "I2 = ")
 }
 
 func TestServer_StableHash(t *testing.T) {

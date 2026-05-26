@@ -177,16 +177,21 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			}
 			pub, priv = kp.PublicKey, kp.PrivateKey
 		}
+		psk, gerr := crypto.GeneratePresharedKey()
+		if gerr != nil {
+			return gerr
+		}
 
 		// 2) Reserve IP + insert peer.
 		peer, err := s.Peers.AllocateAndInsert(ctx, tx, repo.InsertParams{
-			TenantID:    tenant.ID,
-			NodeID:      node.ID,
-			ProfileID:   profile.ID,
-			ExternalID:  req.ExternalID,
-			DisplayName: req.DisplayName,
-			PublicKey:   pub,
-			ExpiresAt:   req.ExpiresAt,
+			TenantID:        tenant.ID,
+			NodeID:          node.ID,
+			ProfileID:       profile.ID,
+			ExternalID:      req.ExternalID,
+			DisplayName:     req.DisplayName,
+			PublicKey:       pub,
+			PresharedKeyRef: &psk,
+			ExpiresAt:       req.ExpiresAt,
 		})
 		if err != nil {
 			return err
@@ -222,14 +227,15 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 
 		// 5) Build response and persist idempotency record.
 		resp = CreatePeerResponse{
-			OperationID: op.ID.String(),
-			PeerID:      peer.ID.String(),
-			Status:      string(op.Status),
-			AllowedIP:   peer.AllowedIP.String(),
-			PublicKey:   peer.PublicKey,
-			PrivateKey:  priv,
-			NodeID:      node.ID.String(),
-			ProfileID:   profile.ID.String(),
+			OperationID:  op.ID.String(),
+			PeerID:       peer.ID.String(),
+			Status:       string(op.Status),
+			AllowedIP:    peer.AllowedIP.String(),
+			PublicKey:    peer.PublicKey,
+			PrivateKey:   priv,
+			PresharedKey: psk,
+			NodeID:       node.ID.String(),
+			ProfileID:    profile.ID.String(),
 		}
 		if priv != "" {
 			resp.ClientConfig = render.Client(render.ClientArgs{
@@ -238,6 +244,7 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 				DNS:              s.ClientDNS,
 				ServerPublicKey:  node.ServerPublicKey,
 				ServerEndpoint:   node.PublicEndpoint,
+				PresharedKey:     psk,
 				Keepalive:        25,
 			}, *profile)
 		}
@@ -247,6 +254,7 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		safe := resp
 		safe.PrivateKey = ""
 		safe.ClientConfig = ""
+		safe.PresharedKey = ""
 		if err := s.Idem.Store(ctx, tx, tenant.ID, idemKey, hash, &op.ID, status, safe, s.idempotencyTTL()); err != nil {
 			return err
 		}

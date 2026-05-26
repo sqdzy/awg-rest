@@ -28,12 +28,12 @@ type Interface struct {
 
 // PeerEntry is a single [Peer] block on the server side.
 type PeerEntry struct {
-	PublicKey      string
-	PresharedKey   string
-	AllowedIPs     []string
-	Endpoint       string
-	Keepalive      int
-	Comment        string // optional human-readable label as a # comment
+	PublicKey    string
+	PresharedKey string
+	AllowedIPs   []string
+	Endpoint     string
+	Keepalive    int
+	Comment      string // optional human-readable label as a # comment
 }
 
 // Server renders the full server configuration. Peers are deterministically
@@ -97,9 +97,9 @@ type ClientArgs struct {
 	DNS              []string
 	MTU              int
 
-	ServerPublicKey  string
-	ServerEndpoint   string // host:port
-	PresharedKey     string
+	ServerPublicKey string
+	ServerEndpoint  string // host:port
+	PresharedKey    string
 
 	AllowedIPs []string // typically 0.0.0.0/0, ::/0
 	Keepalive  int
@@ -157,17 +157,10 @@ func writeProfile(b *strings.Builder, p domain.ProtocolProfile) {
 	fmt.Fprintf(b, "H3 = %s\n", p.H3.String())
 	fmt.Fprintf(b, "H4 = %s\n", p.H4.String())
 	if p.IsV2() {
-		writeI(b, "I1", p.I1)
-		writeI(b, "I2", p.I2)
-		writeI(b, "I3", p.I3)
-		writeI(b, "I4", p.I4)
-		writeI(b, "I5", p.I5)
+		fmt.Fprintf(b, "I1 = %s\n", p.I1)
+		fmt.Fprintf(b, "I2 = %s\n", p.I2)
+		fmt.Fprintf(b, "I3 = %s\n", p.I3)
+		fmt.Fprintf(b, "I4 = %s\n", p.I4)
+		fmt.Fprintf(b, "I5 = %s\n", p.I5)
 	}
-}
-
-func writeI(b *strings.Builder, key, value string) {
-	if value == "" {
-		return
-	}
-	fmt.Fprintf(b, "%s = %s\n", key, value)
 }
