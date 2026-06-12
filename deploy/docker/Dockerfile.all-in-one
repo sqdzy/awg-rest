@@ -25,7 +25,7 @@ ENV CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 RUN go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/awg-api ./cmd/awg-api
 
 # ---- amneziawg-tools builder -------------------------------------------------
-FROM alpine:3.23 AS awg-tools-builder
+FROM alpine:3.24 AS awg-tools-builder
 ARG AMNEZIAWG_TOOLS_TAG=v1.0.20260223
 ARG AMNEZIAWG_TOOLS_COMMIT=5d6179a6d0842e98dfb349c28cf1bd8e4b9d1079
 RUN apk add --no-cache build-base git linux-headers
