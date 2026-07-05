@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 # Single-container "plug-n-play" image for single-node deployments.
 # Includes PostgreSQL, awg-api with embedded worker, amneziawg-tools,
 # and amneziawg-go userspace fallback.
@@ -13,7 +11,7 @@
 #     ghcr.io/sqdzy/awg-rest-all-in-one:latest
 
 # ---- Go builder --------------------------------------------------------------
-FROM golang:1.26.3-alpine AS go-builder
+FROM golang:1.26.4-alpine AS go-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -25,9 +23,9 @@ ENV CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 RUN go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/awg-api ./cmd/awg-api
 
 # ---- amneziawg-tools builder -------------------------------------------------
-FROM alpine:3.23 AS awg-tools-builder
-ARG AMNEZIAWG_TOOLS_TAG=v1.0.20260223
-ARG AMNEZIAWG_TOOLS_COMMIT=5d6179a6d0842e98dfb349c28cf1bd8e4b9d1079
+FROM alpine:3.24 AS awg-tools-builder
+ARG AMNEZIAWG_TOOLS_TAG=v1.0.20260618-2
+ARG AMNEZIAWG_TOOLS_COMMIT=61e741780e8465a67a7d7fb6cffe14a8a15d624a
 RUN apk add --no-cache build-base git linux-headers
 RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amnezia-vpn/amneziawg-tools.git /src/amneziawg-tools && \
     cd /src/amneziawg-tools && \
@@ -39,9 +37,9 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amn
     chmod 0755 /out/awg /out/awg-quick
 
 # ---- amneziawg-go builder ----------------------------------------------------
-FROM golang:1.26.3-alpine AS awg-go-builder
-ARG AMNEZIAWG_GO_TAG=v0.2.18
-ARG AMNEZIAWG_GO_COMMIT=f4f4c999267437c3eb909e8d0e5278fb4596d9a7
+FROM golang:1.26.4-alpine AS awg-go-builder
+ARG AMNEZIAWG_GO_TAG=v0.2.19
+ARG AMNEZIAWG_GO_COMMIT=1cc94272ca8e9e223a5fe76382f5880f09d3c12d
 RUN apk add --no-cache git make
 RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_TAG}" https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go && \
     cd /src/amneziawg-go && \

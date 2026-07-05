@@ -1,5 +1,6 @@
 .git
 .github
+.codegraph
 .omx
 test
 **/*_test.go
@@ -7,5 +8,9 @@ README.md
 AGENTS.md
 llms.txt
 *.exe
+*.log
+.env
+.env.*
+!.env.example
 .idea
 .vscode
