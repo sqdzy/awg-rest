@@ -92,6 +92,27 @@ func TestClient_DefaultAllowedIPs(t *testing.T) {
 	require.Contains(t, out, "I5 = ")
 }
 
+func TestAmneziaClient_ForcesFullTunnelAllowedIPs(t *testing.T) {
+	t.Parallel()
+	out := AmneziaClient(ClientArgs{
+		ClientPrivateKey: "ZZZZ",
+		ClientAddress:    []string{"10.90.0.5/32"},
+		ServerPublicKey:  "SERV",
+		ServerEndpoint:   "vpn.example.com:585",
+		PresharedKey:     "PSK1",
+		AllowedIPs:       []string{"1.1.1.1/32", "8.8.8.8/32"},
+		Keepalive:        25,
+	}, sampleV2Profile())
+
+	// AmneziaVPN enables app-level site/app split tunneling for imported AWG/WG
+	// configs only when the peer remains full-tunnel. Keep the exact route order:
+	// iOS/macOS NetworkExtension checks for this full-tunnel shape before applying
+	// split tunneling.
+	require.Contains(t, out, "AllowedIPs = 0.0.0.0/0, ::/0\n")
+	require.NotContains(t, out, "1.1.1.1/32")
+	require.NotContains(t, out, "8.8.8.8/32")
+}
+
 func TestServer_StableHash(t *testing.T) {
 	t.Parallel()
 	args := func() (Interface, []PeerEntry) {

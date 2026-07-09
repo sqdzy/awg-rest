@@ -11,7 +11,7 @@
 #     ghcr.io/sqdzy/awg-rest-all-in-one:latest
 
 # ---- Go builder --------------------------------------------------------------
-FROM golang:1.26.4-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -37,7 +37,7 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amn
     chmod 0755 /out/awg /out/awg-quick
 
 # ---- amneziawg-go builder ----------------------------------------------------
-FROM golang:1.26.4-alpine AS awg-go-builder
+FROM golang:1.26-alpine AS awg-go-builder
 ARG AMNEZIAWG_GO_TAG=v0.2.19
 ARG AMNEZIAWG_GO_COMMIT=1cc94272ca8e9e223a5fe76382f5880f09d3c12d
 RUN apk add --no-cache git make

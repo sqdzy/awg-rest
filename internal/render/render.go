@@ -15,6 +15,11 @@ import (
 	"github.com/awg-rest/awg-rest/internal/domain"
 )
 
+const (
+	amneziaIPv4DefaultRoute = "0.0.0.0/0"
+	amneziaIPv6DefaultRoute = "::/0"
+)
+
 // Interface contains the data needed to render an [Interface] block.
 type Interface struct {
 	PrivateKey string
@@ -132,7 +137,7 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 	}
 	allowed := args.AllowedIPs
 	if len(allowed) == 0 {
-		allowed = []string{"0.0.0.0/0", "::/0"}
+		allowed = amneziaFullTunnelAllowedIPs()
 	}
 	fmt.Fprintf(&b, "AllowedIPs = %s\n", strings.Join(allowed, ", "))
 	fmt.Fprintf(&b, "Endpoint = %s\n", args.ServerEndpoint)
@@ -140,6 +145,22 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 		fmt.Fprintf(&b, "PersistentKeepalive = %d\n", args.Keepalive)
 	}
 	return b.String()
+}
+
+// AmneziaClient renders an AmneziaVPN-importable client config.
+//
+// Keep this config full-tunnel even when the user intends to enable split
+// tunneling in the AmneziaVPN app. AmneziaVPN applies site/app split tunneling
+// as an application-level setting and enables that path for imported AWG/WG
+// configs only when the peer remains full-tunnel. In particular, keep this
+// exact order for iOS/macOS NetworkExtension compatibility.
+func AmneziaClient(args ClientArgs, profile domain.ProtocolProfile) string {
+	args.AllowedIPs = amneziaFullTunnelAllowedIPs()
+	return Client(args, profile)
+}
+
+func amneziaFullTunnelAllowedIPs() []string {
+	return []string{amneziaIPv4DefaultRoute, amneziaIPv6DefaultRoute}
 }
 
 func writeProfile(b *strings.Builder, p domain.ProtocolProfile, includeEmptySpecialJunk bool) {
