@@ -50,7 +50,7 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_TAG}" https://github.com/amnezi
 RUN chmod 0755 /out/amneziawg-go && ln -s amneziawg-go /out/wireguard-go
 
 # ---- final -------------------------------------------------------------------
-FROM postgres:17-alpine AS awg-rest-all-in-one
+FROM postgres:18-alpine AS awg-rest-all-in-one
 RUN apk add --no-cache bash iproute2 iptables nftables openresolv ca-certificates su-exec
 
 # AmneziaWG tooling
