@@ -238,7 +238,7 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			ProfileID:    profile.ID.String(),
 		}
 		if priv != "" {
-			resp.ClientConfig = render.Client(render.ClientArgs{
+			resp.ClientConfig = render.AmneziaClient(render.ClientArgs{
 				ClientPrivateKey: priv,
 				ClientAddress:    []string{peer.AllowedIP.String()},
 				DNS:              s.ClientDNS,
@@ -397,7 +397,7 @@ func (s *Service) GetPeer(ctx context.Context, tenantSlug, id string) (*domain.P
 	return p, nil
 }
 
-// PeerConfiguration returns a rendered AmneziaWG client config.
+// PeerConfiguration returns a rendered non-secret AmneziaWG client config skeleton.
 func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID string) (string, error) {
 	peer, err := s.GetPeer(ctx, tenantSlug, peerID)
 	if err != nil {
@@ -411,7 +411,7 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 	if err != nil {
 		return "", err
 	}
-	out := render.Client(render.ClientArgs{
+	out := render.AmneziaClient(render.ClientArgs{
 		ClientAddress:   []string{peer.AllowedIP.String()},
 		DNS:             s.ClientDNS,
 		ServerPublicKey: node.ServerPublicKey,
