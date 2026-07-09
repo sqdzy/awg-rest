@@ -163,6 +163,19 @@ The first create response includes one-time secret material:
 Store `client_config` in your backend and deliver it to the user once. It is not
 returned again on idempotency replay.
 
+The generated `client_config` is intentionally rendered as a full-tunnel
+AmneziaVPN-importable AWG config:
+
+```ini
+AllowedIPs = 0.0.0.0/0, ::/0
+```
+
+Do not rewrite this field into a custom route list for AmneziaVPN users.
+AmneziaVPN applies site/app split tunneling as an application-level setting
+after the config is imported. Keeping the imported AWG/WireGuard peer
+full-tunnel lets the AmneziaVPN client enable and manage split tunneling from
+its own UI.
+
 Poll the operation:
 
 ```bash
