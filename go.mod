@@ -1,6 +1,6 @@
 module github.com/awg-rest/awg-rest
 
-go 1.26.4
+go 1.26
 
 require (
 	github.com/go-chi/chi/v5 v5.3.0
