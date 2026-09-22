@@ -15,12 +15,25 @@ type Nodes struct{ DB *DB }
 
 // Insert creates a new VPN node entry.
 func (r *Nodes) Insert(ctx context.Context, n domain.Node) (*domain.Node, error) {
+	return insertNode(ctx, r.DB.Pool, n)
+}
+
+// InsertTx creates a node inside an existing transaction.
+func (r *Nodes) InsertTx(ctx context.Context, tx pgx.Tx, n domain.Node) (*domain.Node, error) {
+	return insertNode(ctx, tx, n)
+}
+
+type nodeRowQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func insertNode(ctx context.Context, qx nodeRowQuerier, n domain.Node) (*domain.Node, error) {
 	const q = `
 INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key, profile_id)
 VALUES ($1,$2,$3,$4,$5,$6,$7)
 RETURNING id, profile_id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at`
 	var out domain.Node
-	row := r.DB.Pool.QueryRow(ctx, q,
+	row := qx.QueryRow(ctx, q,
 		n.Region, n.Hostname, n.PublicEndpoint, n.BasePort,
 		n.InterfaceName, n.ServerPublicKey, n.ProfileID,
 	)
