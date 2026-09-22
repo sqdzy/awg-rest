@@ -34,6 +34,7 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amn
     mkdir -p /out && \
     cp src/wg /out/awg && \
     cp src/wg-quick/linux.bash /out/awg-quick && \
+    cp COPYING /out/amneziawg-tools-COPYING && \
     chmod 0755 /out/awg /out/awg-quick
 
 # ---- amneziawg-go builder ----------------------------------------------------
@@ -46,7 +47,8 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_TAG}" https://github.com/amnezi
     test "$(git rev-parse HEAD)" = "${AMNEZIAWG_GO_COMMIT}" && \
     CGO_ENABLED=0 make && \
     mkdir -p /out && \
-    cp amneziawg-go /out/amneziawg-go
+    cp amneziawg-go /out/amneziawg-go && \
+    cp LICENSE /out/amneziawg-go-LICENSE
 RUN chmod 0755 /out/amneziawg-go && ln -s amneziawg-go /out/wireguard-go
 
 # ---- final -------------------------------------------------------------------
@@ -58,6 +60,8 @@ COPY --from=awg-tools-builder /out/awg /usr/local/bin/awg
 COPY --from=awg-tools-builder /out/awg-quick /usr/local/bin/awg-quick
 COPY --from=awg-go-builder /out/amneziawg-go /usr/local/bin/amneziawg-go
 COPY --from=awg-go-builder /out/wireguard-go /usr/local/bin/wireguard-go
+COPY --from=awg-tools-builder /out/amneziawg-tools-COPYING /usr/share/licenses/amneziawg-tools/COPYING
+COPY --from=awg-go-builder /out/amneziawg-go-LICENSE /usr/share/licenses/amneziawg-go/LICENSE
 
 # Go binary
 COPY --from=go-builder /out/awg-api /awg-api
