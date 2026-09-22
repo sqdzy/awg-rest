@@ -197,6 +197,7 @@ func defaultV31Profile(name, headerProtectionKey string) domain.ProtocolProfile 
 		RejectAfterTime:      domain.Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:     domain.Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts: domain.Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:   domain.Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:       true,
 		DisableCookies:       true,
 		ListenPortPolicy:     "fixed",
