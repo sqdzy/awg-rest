@@ -33,6 +33,7 @@ func TestProfiles_V31RoundTrip(t *testing.T) {
 		RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:     domain.Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 		ListenPortPolicy:       "fixed",
@@ -51,6 +52,7 @@ func TestProfiles_V31RoundTrip(t *testing.T) {
 	require.Equal(t, want.RejectAfterTime, got.RejectAfterTime)
 	require.Equal(t, want.KeepaliveTimeout, got.KeepaliveTimeout)
 	require.Equal(t, want.MaxHandshakeAttempts, got.MaxHandshakeAttempts)
+	require.Equal(t, want.PersistentKeepalive, got.PersistentKeepalive)
 	require.Equal(t, want.RandomTrailers, got.RandomTrailers)
 	require.Equal(t, want.DisableCookies, got.DisableCookies)
 }
