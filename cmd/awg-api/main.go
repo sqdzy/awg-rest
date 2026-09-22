@@ -8,9 +8,11 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"runtime"
 	"syscall"
 	"time"
@@ -36,7 +38,7 @@ func main() {
 	v31Profile := flag.String("v31-profile-name", "default-v31", "new V3.1 protocol profile name")
 	v31Region := flag.String("v31-node-region", bootstrapDefaults.NodeRegion, "new V3.1 node region")
 	v31Hostname := flag.String("v31-node-hostname", "awg-node-31", "new V3.1 node hostname")
-	v31Endpoint := flag.String("v31-node-endpoint", bootstrapDefaults.NodeEndpoint, "public IP or DNS name for the V3.1 node")
+	v31Endpoint := flag.String("v31-node-endpoint", endpointHost(bootstrapDefaults.NodeEndpoint), "public IP or DNS name for the V3.1 node")
 	v31Port := flag.Int("v31-node-port", 38824, "UDP listen/published port for the V3.1 node")
 	v31Iface := flag.String("v31-node-iface", "awg31", "local interface name for the V3.1 node")
 	v31Pool := flag.String("v31-pool-cidr", "10.201.0.0/24", "non-overlapping client address pool for the V3.1 node")
@@ -182,4 +184,13 @@ func buildExecutor(cfg *config.Config, logger *slog.Logger) awg.Executor {
 	default:
 		return awg.NewFakeExecutor(time.Time{})
 	}
+}
+
+
+func endpointHost(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if host, _, err := net.SplitHostPort(endpoint); err == nil {
+		return host
+	}
+	return endpoint
 }
