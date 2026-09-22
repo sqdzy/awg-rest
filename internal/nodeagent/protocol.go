@@ -37,7 +37,8 @@ type PeerRuntime struct {
 	LastHandshake time.Time `json:"last_handshake,omitempty"`
 	RxBytes       int64     `json:"rx_bytes"`
 	TxBytes       int64     `json:"tx_bytes"`
-	KeepaliveSecs int       `json:"keepalive_secs,omitempty"`
+	KeepaliveSecs  int       `json:"keepalive_secs,omitempty"`
+	KeepaliveRange string    `json:"keepalive_range,omitempty"`
 }
 
 // InterfaceRuntime is the per-interface row of `awg show <iface> dump`.
