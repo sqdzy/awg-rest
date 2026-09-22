@@ -207,7 +207,8 @@ components:
       properties:
         external_id:  { type: string, description: client-supplied stable ID }
         display_name: { type: string }
-        node_id:      { type: string, format: uuid, description: target node/interface; its profile is authoritative }
+        node_id:      { type: string, format: uuid, description: target node/interface; mutually exclusive with node_hostname; its profile is authoritative }
+        node_hostname: { type: string, description: stable target node hostname; mutually exclusive with node_id }
         profile_id:   { type: string, format: uuid, description: optional compatibility assertion; when present it must match the node profile }
         profile_name: { type: string, description: optional compatibility assertion; when present it must match the node profile }
         public_key:   { type: string, description: optional client-supplied public key (44-char base64) }
