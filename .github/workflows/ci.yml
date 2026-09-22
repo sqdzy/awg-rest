@@ -87,8 +87,9 @@ jobs:
           cid="$(docker create awg-rest-all-in-one:ci)"
           trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           docker cp "$cid:/usr/local/bin/awg" "$out/awg"
+          docker cp "$cid:/usr/local/bin/awg-quick" "$out/awg-quick"
           docker cp "$cid:/usr/local/bin/amneziawg-go" "$out/amneziawg-go"
-          chmod 0755 "$out/awg" "$out/amneziawg-go"
+          chmod 0755 "$out/awg" "$out/awg-quick" "$out/amneziawg-go"
           echo "$out" >> "$GITHUB_PATH"
       - name: prepare TUN
         shell: bash
@@ -96,6 +97,7 @@ jobs:
           set -euo pipefail
           command -v ip
           command -v ping
+          sudo modprobe tun 2>/dev/null || true
           if [[ ! -c /dev/net/tun ]]; then
             sudo mkdir -p /dev/net
             sudo mknod /dev/net/tun c 10 200
