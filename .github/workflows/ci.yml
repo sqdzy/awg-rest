@@ -66,11 +66,51 @@ jobs:
         run: go test -timeout=300s -tags=e2e ./test/e2e/...
 
   docker-build:
-    name: docker image
-    runs-on: ubuntu-latest
+    name: docker image + real userspace AWG
+    runs-on: ubuntu-24.04
     needs: [lint-unit]
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
       - uses: docker/setup-buildx-action@v4
       - name: build all-in-one
         run: docker build -f deploy/docker/Dockerfile.all-in-one --target awg-rest-all-in-one -t awg-rest-all-in-one:ci .
+      - name: extract pinned AWG runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/awg31-bin"
+          mkdir -p "$out"
+          cid="$(docker create awg-rest-all-in-one:ci)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/local/bin/awg" "$out/awg"
+          docker cp "$cid:/usr/local/bin/amneziawg-go" "$out/amneziawg-go"
+          chmod 0755 "$out/awg" "$out/amneziawg-go"
+          echo "$out" >> "$GITHUB_PATH"
+      - name: prepare TUN
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ip
+          command -v ping
+          if [[ ! -c /dev/net/tun ]]; then
+            sudo mkdir -p /dev/net
+            sudo mknod /dev/net/tun c 10 200
+          fi
+          sudo chmod 0666 /dev/net/tun
+          test -c /dev/net/tun
+      - name: compile real userspace AWG test binary
+        run: go test -c -tags="e2e linux_awg" -o "${RUNNER_TEMP}/real-awg-e2e.test" ./test/e2e
+      - name: real userspace AWG network E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          awg --version
+          amneziawg-go --version
+          sudo -E env "PATH=$PATH" "${RUNNER_TEMP}/real-awg-e2e.test" \
+            -test.v \
+            -test.timeout=600s \
+            -test.run='^TestRealAWG_ProtocolCompatibility
