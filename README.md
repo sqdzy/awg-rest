@@ -216,12 +216,15 @@ parameters for every other peer on the same node.
 
 The first create response includes one-time secret material:
 
-- `private_key`
-- `client_config`
-- `preshared_key`
+- `private_key` when awg-rest generated the client keypair;
+- `client_config` on every successful first create;
+- `preshared_key`.
 
-Store `client_config` in your backend and deliver it to the user once. It is not
-returned again on idempotency replay.
+When the caller supplied `public_key`, `client_config` intentionally omits
+`PrivateKey` but still carries the one-time protocol secrets (including the
+V3.1 HeaderProtectionKey and PSK). Merge the locally owned private key before
+importing the config. Store/deliver this one-time response securely: secret
+fields are not returned again on idempotency replay.
 
 The generated `client_config` is intentionally rendered as a full-tunnel
 AmneziaVPN-importable AWG config:
