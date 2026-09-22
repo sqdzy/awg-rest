@@ -15,6 +15,8 @@ ALTER TABLE protocol_profiles
     ADD COLUMN IF NOT EXISTS keepalive_timeout_max INT,
     ADD COLUMN IF NOT EXISTS max_handshake_attempts_min INT,
     ADD COLUMN IF NOT EXISTS max_handshake_attempts_max INT,
+    ADD COLUMN IF NOT EXISTS persistent_keepalive_min INT,
+    ADD COLUMN IF NOT EXISTS persistent_keepalive_max INT,
     ADD COLUMN IF NOT EXISTS random_trailers BOOLEAN,
     ADD COLUMN IF NOT EXISTS disable_cookies BOOLEAN;
 
@@ -28,7 +30,8 @@ BEGIN
         'rekey_timeout_min', 'rekey_timeout_max',
         'reject_after_time_min', 'reject_after_time_max',
         'keepalive_timeout_min', 'keepalive_timeout_max',
-        'max_handshake_attempts_min', 'max_handshake_attempts_max'
+        'max_handshake_attempts_min', 'max_handshake_attempts_max',
+        'persistent_keepalive_min', 'persistent_keepalive_max'
     ]
     LOOP
         BEGIN
@@ -104,7 +107,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END
 $$;
 
-DO $$
+DO $
 BEGIN
     ALTER TABLE protocol_profiles
         ADD CONSTRAINT protocol_profiles_max_handshake_attempts_order_check
@@ -114,7 +117,19 @@ BEGIN
         );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END
-$$;
+$;
+
+DO $
+BEGIN
+    ALTER TABLE protocol_profiles
+        ADD CONSTRAINT protocol_profiles_persistent_keepalive_order_check
+        CHECK (
+            persistent_keepalive_min IS NULL OR persistent_keepalive_max IS NULL OR
+            persistent_keepalive_min <= persistent_keepalive_max
+        );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$;
 
 DO $$
 BEGIN
@@ -135,7 +150,8 @@ BEGIN
             (rekey_timeout_min IS NULL) = (rekey_timeout_max IS NULL) AND
             (reject_after_time_min IS NULL) = (reject_after_time_max IS NULL) AND
             (keepalive_timeout_min IS NULL) = (keepalive_timeout_max IS NULL) AND
-            (max_handshake_attempts_min IS NULL) = (max_handshake_attempts_max IS NULL)
+            (max_handshake_attempts_min IS NULL) = (max_handshake_attempts_max IS NULL) AND
+            (persistent_keepalive_min IS NULL) = (persistent_keepalive_max IS NULL)
         );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END
@@ -154,6 +170,7 @@ BEGIN
                 reject_after_time_min IS NULL AND reject_after_time_max IS NULL AND
                 keepalive_timeout_min IS NULL AND keepalive_timeout_max IS NULL AND
                 max_handshake_attempts_min IS NULL AND max_handshake_attempts_max IS NULL AND
+                persistent_keepalive_min IS NULL AND persistent_keepalive_max IS NULL AND
                 random_trailers IS NULL AND disable_cookies IS NULL
             )
         );
