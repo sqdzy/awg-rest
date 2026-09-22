@@ -411,13 +411,18 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 	if err != nil {
 		return "", err
 	}
+	publicProfile := *profile
+	// This endpoint is intentionally a non-secret skeleton. HeaderProtectionKey
+	// is key material just like client private/PSK values; the complete V3.1
+	// config is issued only in the one-time create response.
+	publicProfile.HeaderProtectionKey = ""
 	out := render.AmneziaClient(render.ClientArgs{
 		ClientAddress:   []string{peer.AllowedIP.String()},
 		DNS:             s.ClientDNS,
 		ServerPublicKey: node.ServerPublicKey,
 		ServerEndpoint:  node.PublicEndpoint,
 		Keepalive:       25,
-	}, *profile)
+	}, publicProfile)
 	return out, nil
 }
 
