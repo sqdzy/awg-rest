@@ -45,9 +45,12 @@ fixed before mixed V2/V3.1 operation.
   exact commit SHA.
 - **NFR-2 Rollback:** runtime uplift, schema ownership change, and V3.1 feature
   support SHOULD remain separable commits.
-- **NFR-3 Secrets:** HeaderProtectionKey MUST NOT be written to logs or audit
-  messages as plaintext. Persistence and snapshot handling require explicit
-  review before production enablement.
+- **NFR-3 Secrets:** HeaderProtectionKey MUST NOT be exposed through logs,
+  audit JSON, diagnostic dumps, or non-secret configuration endpoints.
+  Persistence uses the same secret-bearing Postgres trust boundary as existing
+  peer preshared keys; volumes and backups MUST be protected accordingly.
+  A future encryption-at-rest layer SHOULD cover all persisted VPN key material
+  together rather than encrypting only one key type.
 - **NFR-4 Compatibility:** migrations MUST be additive; `0001_init` is immutable.
 - **NFR-5 Verification:** unit, integration, fake-AWG E2E, Docker build, and
   real-AWG E2E form the release gate.
