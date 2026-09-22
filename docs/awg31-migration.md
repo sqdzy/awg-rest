@@ -31,7 +31,8 @@ fixed before mixed V2/V3.1 operation.
   parameters needed by current Amnezia clients:
   `HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`,
   `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`,
-  `MaxHandshakeAttempts`, `RandomTrailers`, and `DisableCookies`.
+  `MaxHandshakeAttempts`, peer-side `PersistentKeepalive`,
+  `RandomTrailers`, and `DisableCookies`.
 - **FR-7** V3.1 ranges MUST be validated using unsigned protocol bounds.
 - **FR-8** V3.1 profiles with `RandomTrailers=on` MUST reject ranged H1-H3
   until upstream packet-classification behavior is proven safe by real E2E.
@@ -75,7 +76,8 @@ with multiple distinct `profile_id` values.
 ### protocol_profiles
 
 Keep all V2 columns. Add nullable V3.1-only fields so legacy rows remain valid.
-Range-valued 3.x parameters are stored as min/max integer pairs. Boolean toggles
+Range-valued 3.x parameters, including `PersistentKeepalive`, are stored as
+min/max integer pairs. Boolean toggles
 are nullable for legacy rows; V3.1 inserts persist concrete true/false values and
 the renderer emits explicit `on`/`off` settings.
 
@@ -87,6 +89,30 @@ profile. Omitting the profile means inherit the node profile.
 
 A later API cleanup MAY deprecate per-peer profile selection.
 
+
+## Operator rollout
+
+The all-in-one installation keeps its original bootstrap node/profile on V2.
+A second V3.1 node is created only by an explicit create-only admin command:
+
+```bash
+docker compose -f compose.yaml -f compose.v31.yaml up -d
+docker compose exec -T awg-rest /awg-api -provision-v31-node
+```
+
+The provisioner creates the V3.1 profile, node, non-overlapping address pool,
+server key and `0600` bootstrap config in one controlled operation. It rejects
+duplicate profile names, hostnames, interface names, local UDP ports and
+overlapping pools. Returned JSON omits HeaderProtectionKey and the server private
+key. New peers must target the returned `node_id` explicitly during canary
+migration.
+
+The V3.1 preset follows the parameters currently assigned by the Amnezia client
+installer. `ContentPaddingAddition` is intentionally omitted because the current
+client source defines its `10-100` constant but does not assign that field in
+`generateAwgParameters()`. This avoids inventing a default that the client
+itself is not presently using.
+
 ## Acceptance criteria
 
 - **AC-1 / FR-1:** the Docker image builds with the pinned 3.1-capable tools and
@@ -97,7 +123,8 @@ A later API cleanup MAY deprecate per-peer profile selection.
 - **AC-4 / FR-4:** peer creation with a mismatched node/profile combination
   returns a validation/conflict error and creates no desired state.
 - **AC-5 / FR-5..7:** a valid V3.1 profile round-trips through validation,
-  repository persistence, and rendering.
+  repository persistence, and rendering, including the 3.x
+  `PersistentKeepalive` range.
 - **AC-6 / FR-8:** V3.1 validation rejects RandomTrailers with ranged H1-H3.
 - **AC-6a / FR-8a:** domain tests reject negative/oversized/malformed I1-I5
   tags before they can reach `amneziawg-go`.
