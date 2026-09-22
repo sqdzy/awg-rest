@@ -113,12 +113,15 @@ A later API cleanup MAY deprecate per-peer profile selection.
 4. `go test -tags=integration ./test/integration/...`
 5. `go test -tags=e2e ./test/e2e/...`
 6. Build `deploy/docker/Dockerfile.all-in-one`.
-7. On the self-hosted real-AWG runner:
-   - V2 client -> 3.1-capable runtime
-   - V3.1 client -> V3.1 runtime
+7. Hosted real-userspace AWG gate builds the all-in-one image, extracts the
+   exact pinned `awg` and `amneziawg-go` binaries, creates Linux network
+   namespaces/TUN interfaces, and proves:
+   - V2 client -> 3.1-capable userspace runtime
+   - V3.1 client -> V3.1 userspace runtime
    - UDP/TCP transfer, rekey, reconnect, MTU boundaries
    - RandomTrailers with fixed H values
-   - separate V2 and V3.1 interfaces
+8. Optional self-hosted `real-awg` workflow remains available for
+   host/kernel-specific validation when required.
 
 ## Out of scope for the first implementation slice
 
@@ -128,3 +131,22 @@ A later API cleanup MAY deprecate per-peer profile selection.
   and real-network verification passes;
 - silently rewriting existing client configs;
 - merging the V2 and V3.1 interfaces onto one protocol profile.
+
+
+## Verification evidence — 2026-09-22
+
+GitHub Actions CI run #148 passed the complete gate on the migration branch,
+including the real userspace AWG network E2E. The test built the current
+all-in-one image, extracted `amneziawg-tools v3.1.20260812` and
+`amneziawg-go v3.1.20260828`, and ran the tunnel in isolated Linux network
+namespaces using real TUN interfaces.
+
+Passed real-network scenarios:
+
+- V2 profile on the pinned 3.1-capable userspace runtime;
+- V3.1 profile with fixed H1-H4, HeaderProtectionKey, RandomTrailers and
+  DisableCookies;
+- near-MTU ICMP;
+- TCP echo and UDP echo through the encrypted tunnel;
+- V3.1 rekey with an observed newer handshake;
+- client interface teardown/recreate followed by a fresh handshake and traffic.
