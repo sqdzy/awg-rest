@@ -66,6 +66,7 @@ type Node struct {
 	ID              uuid.UUID  `json:"id"`
 	ProfileID       *uuid.UUID `json:"profile_id,omitempty"`
 	IsDefault       bool       `json:"is_default"`
+	AcceptNewPeers  bool       `json:"accept_new_peers"`
 	Region          string     `json:"region"`
 	Hostname        string     `json:"hostname"`
 	Status          string     `json:"status"`
