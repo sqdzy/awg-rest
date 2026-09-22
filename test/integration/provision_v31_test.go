@@ -21,6 +21,19 @@ func TestProvisionV31Node_CreateOnlyAndAtomic(t *testing.T) {
 	tenant, err := (&repo.Tenants{DB: db}).Upsert(ctx, "default")
 	require.NoError(t, err)
 
+	legacyProfile, err := (&repo.Profiles{DB: db}).Insert(ctx, migrationV2Profile("legacy-default-v2", 20_000))
+	require.NoError(t, err)
+	legacyNode, err := (&repo.Nodes{DB: db}).Insert(ctx, domain.Node{
+		ProfileID:       &legacyProfile.ID,
+		Region:          "eu",
+		Hostname:        "zz-legacy-v2.test",
+		PublicEndpoint:  "203.0.113.30:38823",
+		BasePort:        38823,
+		InterfaceName:   "awg0",
+		ServerPublicKey: "legacy-server-public",
+	})
+	require.NoError(t, err)
+
 	dir := t.TempDir()
 	opts := bootstrap.V31NodeOptions{
 		TenantSlug:       tenant.Slug,
@@ -42,6 +55,11 @@ func TestProvisionV31Node_CreateOnlyAndAtomic(t *testing.T) {
 	require.Equal(t, "203.0.113.31:38824", got.PublicEndpoint)
 	require.Equal(t, "10.201.0.0/24", got.PoolCIDR)
 	require.NotEmpty(t, got.ServerPublicKey)
+
+	picked, err := (&repo.Nodes{DB: db}).PickFirst(ctx)
+	require.NoError(t, err)
+	require.Equal(t, legacyNode.ID, picked.ID,
+		"parallel v3.1 node must not become implicit default while a legacy node exists")
 
 	profile, err := (&repo.Profiles{DB: db}).GetByID(ctx, got.ProfileID)
 	require.NoError(t, err)
