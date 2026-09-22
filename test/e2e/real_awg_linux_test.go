@@ -67,7 +67,7 @@ func TestRealAWG_ProtocolCompatibility(t *testing.T) {
 			RejectAfterTime:        domain.Uint16Range{Min: 10, Max: 10},
 			KeepaliveTimeout:       domain.Uint16Range{Min: 1, Max: 1},
 			MaxHandshakeAttempts:   domain.Uint16Range{Min: 5, Max: 5},
-			PersistentKeepalive:     domain.Uint16Range{Min: 1, Max: 1},
+			PersistentKeepalive:     domain.Uint16Range{Min: 1, Max: 2},
 			RandomTrailers:         true,
 			DisableCookies:         true,
 		}
@@ -175,6 +175,18 @@ func runRealTunnelCase(t *testing.T, profile domain.ProtocolProfile, serverPort 
 	require.Len(t, peerRuntime, 1)
 	require.Equal(t, clientKP.PublicKey, peerRuntime[0].PublicKey)
 	require.False(t, peerRuntime[0].LastHandshake.IsZero())
+
+	clientRawDump := runNetNSOutputSensitive(t, clientNS, "awg", "show", clientIface, "dump")
+	_, clientRuntimePeers, err := awg.ParseShowDump(clientRawDump)
+	require.NoError(t, err)
+	require.Len(t, clientRuntimePeers, 1)
+	if profile.IsV31() {
+		require.Equal(t, "1-2", clientRuntimePeers[0].KeepaliveRange)
+		require.Zero(t, clientRuntimePeers[0].KeepaliveSecs)
+	} else {
+		require.Equal(t, "1", clientRuntimePeers[0].KeepaliveRange)
+		require.Equal(t, 1, clientRuntimePeers[0].KeepaliveSecs)
+	}
 
 	// Exercise application traffic in both common transport modes, not only ICMP.
 	runPythonEcho(t, dir, serverNS, clientNS, "tcp", serverTunnel.String(), 52101)
