@@ -35,6 +35,8 @@ RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amn
     cp src/wg /out/awg && \
     cp src/wg-quick/linux.bash /out/awg-quick && \
     cp COPYING /out/amneziawg-tools-COPYING && \
+    cp -a /src/amneziawg-tools /out/amneziawg-tools-source && \
+    rm -rf /out/amneziawg-tools-source/.git && \
     chmod 0755 /out/awg /out/awg-quick
 
 # ---- amneziawg-go builder ----------------------------------------------------
@@ -61,6 +63,7 @@ COPY --from=awg-tools-builder /out/awg-quick /usr/local/bin/awg-quick
 COPY --from=awg-go-builder /out/amneziawg-go /usr/local/bin/amneziawg-go
 COPY --from=awg-go-builder /out/wireguard-go /usr/local/bin/wireguard-go
 COPY --from=awg-tools-builder /out/amneziawg-tools-COPYING /usr/share/licenses/amneziawg-tools/COPYING
+COPY --from=awg-tools-builder /out/amneziawg-tools-source /usr/share/src/amneziawg-tools
 COPY --from=awg-go-builder /out/amneziawg-go-LICENSE /usr/share/licenses/amneziawg-go/LICENSE
 
 # Go binary
