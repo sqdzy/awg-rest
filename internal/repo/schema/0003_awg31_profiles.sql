@@ -31,13 +31,15 @@ BEGIN
         'max_handshake_attempts_min', 'max_handshake_attempts_max'
     ]
     LOOP
-        EXECUTE format(
-            'ALTER TABLE protocol_profiles ADD CONSTRAINT %I CHECK (%I IS NULL OR (%I BETWEEN 0 AND 65535))',
-            'protocol_profiles_' || col || '_u16_check', col, col
-        );
-    EXCEPTION
-        WHEN duplicate_object THEN
-            NULL;
+        BEGIN
+            EXECUTE format(
+                'ALTER TABLE protocol_profiles ADD CONSTRAINT %I CHECK (%I IS NULL OR (%I BETWEEN 0 AND 65535))',
+                'protocol_profiles_' || col || '_u16_check', col, col
+            );
+        EXCEPTION
+            WHEN duplicate_object THEN
+                NULL;
+        END;
     END LOOP;
 END
 $$;
