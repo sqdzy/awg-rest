@@ -184,6 +184,48 @@ after the config is imported. Keeping the imported AWG/WireGuard peer
 full-tunnel lets the AmneziaVPN client enable and manage split tunneling from
 its own UI.
 
+### Opt-in AmneziaWG 3.1 node
+
+The base deployment intentionally keeps the existing V2 node as the default.
+To add a parallel V3.1 interface without changing existing peers or unpinned
+create-peer calls, enable the rollout override:
+
+```bash
+docker compose -f compose.yaml -f compose.awg31.yaml up -d
+```
+
+This adds, by default:
+
+- profile `default-v3.1`;
+- node `awg-node-31` on interface `awg31`;
+- VPN pool `10.201.0.0/24`;
+- UDP listener `38824/udp`.
+
+The V3.1 profile uses the fixed H1-H4 safety preset verified by the real
+userspace network gate. The legacy V2 node remains `is_default=true`.
+
+Place a new peer on V3.1 by stable node hostname:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:18080/v1/tenants/default/peers" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: user-124-create-v31" \
+  -d '{
+    "external_id": "user-124",
+    "display_name": "User 124",
+    "node_hostname": "awg-node-31",
+    "profile_name": "default-v3.1"
+  }'
+```
+
+`profile_name` is optional here and acts only as an assertion. Omitting both
+`node_id` and `node_hostname` continues to place the peer on the explicit
+default V2 node.
+
+To disable new V3.1 provisioning, deploy only `compose.yaml`. Existing V3.1
+database state is not deleted automatically; this avoids destructive rollback.
+
 Poll the operation:
 
 ```bash
