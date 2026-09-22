@@ -202,6 +202,16 @@ func stripQuickOnlyFields(config string) string {
 			strings.HasPrefix(trimmed, "PostDown =") {
 			continue
 		}
+		// render.Client intentionally emits empty I1-I5 keys for importable
+		// client configs; raw awg setconf rejects those empty values. Production
+		// SyncConf applies the same normalization after awg-quick strip.
+		if key, value, ok := strings.Cut(trimmed, "="); ok &&
+			strings.TrimSpace(value) == "" {
+			switch strings.ToUpper(strings.TrimSpace(key)) {
+			case "I1", "I2", "I3", "I4", "I5":
+				continue
+			}
+		}
 		b.WriteString(line)
 		b.WriteByte('\n')
 	}
