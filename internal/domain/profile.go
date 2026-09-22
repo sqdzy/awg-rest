@@ -125,7 +125,7 @@ type ProtocolProfile struct {
 	I5 string `json:"i5,omitempty"`
 
 	// V3.1 interface parameters.
-	HeaderProtectionKey    string      `json:"header_protection_key,omitempty"`
+	HeaderProtectionKey    string      `json:"-"`
 	ContentPaddingAddition Uint16Range `json:"content_padding_addition"`
 	RekeyAfterTime         Uint16Range `json:"rekey_after_time"`
 	RekeyTimeout           Uint16Range `json:"rekey_timeout"`
