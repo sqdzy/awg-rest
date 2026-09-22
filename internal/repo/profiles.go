@@ -27,6 +27,19 @@ random_trailers, disable_cookies, created_at`
 
 // Insert persists a profile after server-side validation.
 func (r *Profiles) Insert(ctx context.Context, p domain.ProtocolProfile) (*domain.ProtocolProfile, error) {
+	return insertProfile(ctx, r.DB.Pool, p)
+}
+
+// InsertTx persists a profile inside an existing transaction.
+func (r *Profiles) InsertTx(ctx context.Context, tx pgx.Tx, p domain.ProtocolProfile) (*domain.ProtocolProfile, error) {
+	return insertProfile(ctx, tx, p)
+}
+
+type profileRowQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func insertProfile(ctx context.Context, qx profileRowQuerier, p domain.ProtocolProfile) (*domain.ProtocolProfile, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -59,7 +72,7 @@ INSERT INTO protocol_profiles(
 )
 RETURNING ` + profileReturningColumns
 
-	row := r.DB.Pool.QueryRow(ctx, q,
+	row := qx.QueryRow(ctx, q,
 		p.Name, string(p.ProtocolVersion), p.Jc, p.Jmin, p.Jmax, p.S1, p.S2, p.S3, p.S4,
 		p.H1.Min, p.H1.Max, p.H2.Min, p.H2.Max, p.H3.Min, p.H3.Max, p.H4.Min, p.H4.Max,
 		nullable(p.I1), nullable(p.I2), nullable(p.I3), nullable(p.I4), nullable(p.I5),
