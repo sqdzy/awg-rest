@@ -115,3 +115,64 @@ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END
 $$;
+
+DO $$
+BEGIN
+    ALTER TABLE protocol_profiles
+        ADD CONSTRAINT protocol_profiles_version_check
+        CHECK (protocol_version IN ('v1', 'v2', 'v3.1'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$$;
+
+DO $$
+BEGIN
+    ALTER TABLE protocol_profiles
+        ADD CONSTRAINT protocol_profiles_awg31_pair_completeness_check
+        CHECK (
+            (content_padding_addition_min IS NULL) = (content_padding_addition_max IS NULL) AND
+            (rekey_after_time_min IS NULL) = (rekey_after_time_max IS NULL) AND
+            (rekey_timeout_min IS NULL) = (rekey_timeout_max IS NULL) AND
+            (reject_after_time_min IS NULL) = (reject_after_time_max IS NULL) AND
+            (keepalive_timeout_min IS NULL) = (keepalive_timeout_max IS NULL) AND
+            (max_handshake_attempts_min IS NULL) = (max_handshake_attempts_max IS NULL)
+        );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$$;
+
+DO $$
+BEGIN
+    ALTER TABLE protocol_profiles
+        ADD CONSTRAINT protocol_profiles_awg31_legacy_null_check
+        CHECK (
+            protocol_version = 'v3.1' OR (
+                header_protection_key IS NULL AND
+                content_padding_addition_min IS NULL AND content_padding_addition_max IS NULL AND
+                rekey_after_time_min IS NULL AND rekey_after_time_max IS NULL AND
+                rekey_timeout_min IS NULL AND rekey_timeout_max IS NULL AND
+                reject_after_time_min IS NULL AND reject_after_time_max IS NULL AND
+                keepalive_timeout_min IS NULL AND keepalive_timeout_max IS NULL AND
+                max_handshake_attempts_min IS NULL AND max_handshake_attempts_max IS NULL AND
+                random_trailers IS NULL AND disable_cookies IS NULL
+            )
+        );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$$;
+
+DO $$
+BEGIN
+    ALTER TABLE protocol_profiles
+        ADD CONSTRAINT protocol_profiles_awg31_required_check
+        CHECK (
+            protocol_version <> 'v3.1' OR (
+                header_protection_key IS NOT NULL AND
+                length(header_protection_key) > 0 AND
+                random_trailers IS NOT NULL AND
+                disable_cookies IS NOT NULL
+            )
+        );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$$;
