@@ -133,6 +133,7 @@ type ProtocolProfile struct {
 	RejectAfterTime        Uint16Range `json:"reject_after_time"`
 	KeepaliveTimeout       Uint16Range `json:"keepalive_timeout"`
 	MaxHandshakeAttempts   Uint16Range `json:"max_handshake_attempts"`
+	PersistentKeepalive     Uint16Range `json:"persistent_keepalive"`
 	RandomTrailers         bool        `json:"random_trailers"`
 	DisableCookies         bool        `json:"disable_cookies"`
 
@@ -286,6 +287,7 @@ func (p ProtocolProfile) Validate() error {
 			{"reject_after_time", p.RejectAfterTime},
 			{"keepalive_timeout", p.KeepaliveTimeout},
 			{"max_handshake_attempts", p.MaxHandshakeAttempts},
+			{"persistent_keepalive", p.PersistentKeepalive},
 		} {
 			if !rr.r.valid() {
 				errs = append(errs, ValidationError{
@@ -411,6 +413,7 @@ func (p ProtocolProfile) hasV31OnlyValues() bool {
 		!p.RejectAfterTime.IsZero() ||
 		!p.KeepaliveTimeout.IsZero() ||
 		!p.MaxHandshakeAttempts.IsZero() ||
+		!p.PersistentKeepalive.IsZero() ||
 		p.RandomTrailers || p.DisableCookies
 }
 
