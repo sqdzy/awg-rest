@@ -146,6 +146,7 @@ func sampleV31Profile() domain.ProtocolProfile {
 		RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:     domain.Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 	}
@@ -171,6 +172,7 @@ func TestClient_RendersV31Profile(t *testing.T) {
 		"RejectAfterTime = 150-180",
 		"KeepaliveTimeout = 5-15",
 		"MaxHandshakeAttempts = 15-20",
+		"PersistentKeepalive = 25-35",
 		"RandomTrailers = on",
 		"DisableCookies = on",
 	} {
