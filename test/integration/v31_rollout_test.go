@@ -41,6 +41,7 @@ func TestV31Rollout_ProvisionsParallelNodeAndIsIdempotent(t *testing.T) {
 	v31Node, err := nodes.GetByHostname(ctx, v31.NodeHostname)
 	require.NoError(t, err)
 	require.False(t, v31Node.IsDefault)
+	require.True(t, v31Node.AcceptNewPeers)
 	require.Equal(t, "vpn.example.test:38824", v31Node.PublicEndpoint)
 	require.Equal(t, v31.NodeBasePort, v31Node.BasePort)
 	require.Equal(t, v31.NodeIface, v31Node.InterfaceName)
@@ -172,4 +173,42 @@ func rolloutV31Defaults(dir string) bootstrap.V31Defaults {
 		EnableNAT:        false,
 		EgressIface:      "eth0",
 	}
+}
+
+
+func TestV31Rollout_DrainAndReenableProvisioning(t *testing.T) {
+	ctx := context.Background()
+	db := startPostgres(ctx, t)
+	dir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	base := rolloutBaseDefaults(dir)
+	v31 := rolloutV31Defaults(dir)
+
+	require.NoError(t, bootstrap.RunIfEmpty(ctx, db, base, logger))
+	require.NoError(t, bootstrap.EnsureV31Rollout(ctx, db, base, v31, logger))
+
+	nodes := &repo.Nodes{DB: db}
+	node, err := nodes.GetByHostname(ctx, v31.NodeHostname)
+	require.NoError(t, err)
+	require.True(t, node.AcceptNewPeers)
+
+	v31.AcceptNewPeers = false
+	require.NoError(t, bootstrap.EnsureV31Rollout(ctx, db, base, v31, logger))
+	node, err = nodes.GetByHostname(ctx, v31.NodeHostname)
+	require.NoError(t, err)
+	require.False(t, node.AcceptNewPeers)
+
+	v31.AcceptNewPeers = true
+	require.NoError(t, bootstrap.EnsureV31Rollout(ctx, db, base, v31, logger))
+	node, err = nodes.GetByHostname(ctx, v31.NodeHostname)
+	require.NoError(t, err)
+	require.True(t, node.AcceptNewPeers)
+
+	// Removing the rollout override maps to Enabled=false. Existing state is
+	// preserved, but new V3.1 placement is closed automatically.
+	v31.Enabled = false
+	require.NoError(t, bootstrap.EnsureV31Rollout(ctx, db, base, v31, logger))
+	node, err = nodes.GetByHostname(ctx, v31.NodeHostname)
+	require.NoError(t, err)
+	require.False(t, node.AcceptNewPeers)
 }
