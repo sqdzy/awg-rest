@@ -30,7 +30,9 @@ func TestValidateRequestedProfile_RejectsMismatchedID(t *testing.T) {
 	other := uuid.New().String()
 	err := validateRequestedProfile(p, CreatePeerRequest{ProfileID: &other})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "node_profile_mismatch")
+	ve, ok := err.(domain.ValidationErrors)
+	require.True(t, ok)
+	require.Equal(t, "node_profile_mismatch", ve[0].Code)
 }
 
 func TestValidateRequestedProfile_RejectsMismatchedName(t *testing.T) {
@@ -39,7 +41,9 @@ func TestValidateRequestedProfile_RejectsMismatchedName(t *testing.T) {
 	other := "other-profile"
 	err := validateRequestedProfile(p, CreatePeerRequest{ProfileName: &other})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "node_profile_mismatch")
+	ve, ok := err.(domain.ValidationErrors)
+	require.True(t, ok)
+	require.Equal(t, "node_profile_mismatch", ve[0].Code)
 }
 
 func TestValidateRequestedProfile_RejectsInvalidID(t *testing.T) {
