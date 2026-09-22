@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -245,4 +246,14 @@ func TestUint16Range_StringAndZero(t *testing.T) {
 	require.Equal(t, "5-9", (Uint16Range{Min: 5, Max: 9}).String())
 	require.True(t, (Uint16Range{}).IsZero())
 	require.False(t, (Uint16Range{Min: 1, Max: 1}).IsZero())
+}
+
+
+func TestProtocolProfile_JSONDoesNotExposeHeaderProtectionKey(t *testing.T) {
+	t.Parallel()
+	p := validV31()
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "header_protection_key")
+	require.NotContains(t, string(b), p.HeaderProtectionKey)
 }
