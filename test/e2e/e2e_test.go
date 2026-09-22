@@ -406,8 +406,8 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	v31Node, err := env.Service.Nodes.Insert(ctx, domain.Node{
 		ProfileID:       &v31.ID,
 		Region:          "eu",
-		Hostname:        "vpn-31.test",
-		PublicEndpoint:  "vpn-31.test:586",
+		Hostname:        "aaa-v31.test",
+		PublicEndpoint:  "aaa-v31.test:586",
 		BasePort:        586,
 		InterfaceName:   "awg31",
 		ServerPublicKey: v31KP.PublicKey,
@@ -418,15 +418,29 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.NoError(t, err)
 	env.Executor.Provision("awg31", v31KP.PrivateKey, v31KP.PublicKey, 586)
 
+	defaultResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-default-v2", map[string]any{
+			"external_id": "dual-default-v2",
+		})
+	require.Equal(t, http.StatusAccepted, defaultResp.StatusCode)
+	var createdDefault api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(defaultResp.Body).Decode(&createdDefault))
+	defaultResp.Body.Close()
+	require.Equal(t, env.Node.ID.String(), createdDefault.NodeID,
+		"an unpinned create must stay on the explicit V2 default even when V3.1 hostname sorts first")
+	require.Equal(t, env.Profile.ID.String(), createdDefault.ProfileID)
+
 	v31Resp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
 		bearer, "dual-v31", map[string]any{
-			"external_id": "dual-v31",
-			"node_id":     v31Node.ID.String(),
+			"external_id":   "dual-v31",
+			"node_hostname": v31Node.Hostname,
+			"profile_name":  v31.Name,
 		})
 	require.Equal(t, http.StatusAccepted, v31Resp.StatusCode)
 	var created31 api.CreatePeerResponse
 	require.NoError(t, json.NewDecoder(v31Resp.Body).Decode(&created31))
 	v31Resp.Body.Close()
+	require.Equal(t, v31Node.ID.String(), created31.NodeID)
 	require.Equal(t, v31.ID.String(), created31.ProfileID)
 	require.Contains(t, created31.ClientConfig, "HeaderProtectionKey = ")
 	require.Contains(t, created31.ClientConfig, "RandomTrailers = on")
@@ -439,11 +453,13 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.NotContains(t, cfgBody, "HeaderProtectionKey",
 		"non-secret configuration endpoint must not return V3.1 header key")
 
-	ran, err = env.Worker.RunOnce(ctx)
-	require.NoError(t, err)
-	require.True(t, ran)
+	for range 2 {
+		ran, err = env.Worker.RunOnce(ctx)
+		require.NoError(t, err)
+		require.True(t, ran)
+	}
 
-	require.Len(t, env.Executor.Snapshot("awg0"), 1, "V3.1 reconcile must not alter V2 interface")
+	require.Len(t, env.Executor.Snapshot("awg0"), 2, "V3.1 reconcile must not alter V2 interface")
 	require.Len(t, env.Executor.Snapshot("awg31"), 1)
 }
 
