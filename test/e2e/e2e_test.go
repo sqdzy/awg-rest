@@ -394,6 +394,7 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 		RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:    domain.Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 		ListenPortPolicy:       "fixed",
@@ -430,6 +431,27 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.Contains(t, created31.ClientConfig, "HeaderProtectionKey = ")
 	require.Contains(t, created31.ClientConfig, "RandomTrailers = on")
 	require.Contains(t, created31.ClientConfig, "DisableCookies = on")
+	require.Contains(t, created31.ClientConfig, "PersistentKeepalive = 25-35")
+
+	externalKP, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	externalResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-v31-external-key", map[string]any{
+			"external_id": "dual-v31-external-key",
+			"node_id":     v31Node.ID.String(),
+			"public_key":  externalKP.PublicKey,
+		})
+	require.Equal(t, http.StatusAccepted, externalResp.StatusCode)
+	var externalCreated api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(externalResp.Body).Decode(&externalCreated))
+	externalResp.Body.Close()
+	require.Empty(t, externalCreated.PrivateKey,
+		"server must not invent or return a private key when caller supplied the public key")
+	require.Contains(t, externalCreated.ClientConfig, "HeaderProtectionKey = ")
+	require.Contains(t, externalCreated.ClientConfig, "PresharedKey = "+externalCreated.PresharedKey)
+	require.Contains(t, externalCreated.ClientConfig, "PersistentKeepalive = 25-35")
+	require.NotContains(t, externalCreated.ClientConfig, "PrivateKey =",
+		"one-time config for an external key is a mergeable secret skeleton")
 
 	cfgResp := getJSON(t, client,
 		env.Server.URL+"/v1/tenants/acme/peers/"+created31.PeerID+"/configuration", bearer)
