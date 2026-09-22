@@ -79,6 +79,9 @@ func EnsureV31Rollout(
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if d.TenantSlug != base.TenantSlug {
+		return fmt.Errorf("BOOTSTRAP_V31_TENANT_SLUG %q must match base bootstrap tenant %q for all-in-one rollout", d.TenantSlug, base.TenantSlug)
+	}
 	if strings.TrimSpace(d.ProfileName) == "" {
 		return fmt.Errorf("BOOTSTRAP_V31_PROFILE_NAME is required")
 	}
@@ -128,6 +131,9 @@ func EnsureV31Rollout(
 	baseCIDRs, err := pools.CIDRsByNode(ctx, baseNode.ID)
 	if err != nil {
 		return fmt.Errorf("load base node address pools: %w", err)
+	}
+	if len(baseCIDRs) == 0 {
+		return fmt.Errorf("base node %q has no address pool; refusing V3.1 rollout on incomplete base state", baseNode.Hostname)
 	}
 	for _, existing := range baseCIDRs {
 		if prefixesOverlap(existing, v31Pool) {
@@ -260,6 +266,9 @@ func validateV31Placement(baseNode *domain.Node, d V31Defaults) error {
 }
 
 func validateManagedV31Node(node domain.Node, profile domain.ProtocolProfile, d V31Defaults, endpoint string) error {
+	if node.IsDefault {
+		return fmt.Errorf("existing V3.1 node %q is marked default; managed rollout keeps the legacy V2 node as default", node.Hostname)
+	}
 	if node.ProfileID == nil || *node.ProfileID != profile.ID {
 		return fmt.Errorf("existing V3.1 node %q is bound to a different protocol profile", node.Hostname)
 	}
@@ -316,6 +325,7 @@ func createManagedV31Node(
 
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID:       &profile.ID,
+		IsDefault:       false,
 		Region:          d.NodeRegion,
 		Hostname:        d.NodeHostname,
 		PublicEndpoint:  endpoint,
