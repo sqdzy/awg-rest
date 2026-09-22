@@ -23,6 +23,7 @@ func TestEmbeddedMigrationsMatchOperatorSQL(t *testing.T) {
 		{"migrations/0001_init.up.sql", schemaV1},
 		{"migrations/0002_node_profile_owner.up.sql", schemaV2},
 		{"migrations/0003_awg31_profiles.up.sql", schemaV3},
+		{"migrations/0004_default_node.up.sql", schemaV4},
 	}
 	for _, tt := range tests {
 		tt := tt
