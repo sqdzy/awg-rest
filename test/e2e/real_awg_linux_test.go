@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awg-rest/awg-rest/internal/awg"
 	"github.com/awg-rest/awg-rest/internal/crypto"
 	"github.com/awg-rest/awg-rest/internal/domain"
 	"github.com/awg-rest/awg-rest/internal/render"
@@ -162,6 +163,18 @@ func runRealTunnelCase(t *testing.T, profile domain.ProtocolProfile, serverPort 
 	runNetNS(t, clientNS, "ping", "-c", "3", "-W", "2", "-s", "1200", serverTunnel.String())
 	initialHandshake := latestHandshake(t, serverNS, serverIface)
 	require.Greater(t, initialHandshake, int64(0), "real AWG handshake timestamp must be non-zero")
+
+	// Parse the exact dump produced by the pinned runtime. AWG 3.1 extends the
+	// interface row and allows ranged PersistentKeepalive values; this guards
+	// the production reconciler's ShowDump path, not just tunnel connectivity.
+	rawDump := runNetNSOutputSensitive(t, serverNS, "awg", "show", serverIface, "dump")
+	ifaceRuntime, peerRuntime, err := awg.ParseShowDump(rawDump)
+	require.NoError(t, err)
+	require.Equal(t, serverPort, ifaceRuntime.ListenPort)
+	require.Equal(t, serverKP.PublicKey, ifaceRuntime.PublicKey)
+	require.Len(t, peerRuntime, 1)
+	require.Equal(t, clientKP.PublicKey, peerRuntime[0].PublicKey)
+	require.False(t, peerRuntime[0].LastHandshake.IsZero())
 
 	// Exercise application traffic in both common transport modes, not only ICMP.
 	runPythonEcho(t, dir, serverNS, clientNS, "tcp", serverTunnel.String(), 52101)
