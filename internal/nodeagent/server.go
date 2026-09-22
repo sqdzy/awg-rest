@@ -140,7 +140,14 @@ func syncConfHandler(e awg.Executor) http.HandlerFunc {
 			writeProblem(w, 400, "bad_request", err.Error())
 			return
 		}
-		if err := e.SyncConf(r.Context(), iface, string(body)); err != nil {
+		// Keep the interface private key local to the node. The remote control
+		// plane receives only redacted showconf output, so the agent itself must
+		// preserve the real key immediately before applying a desired config.
+		config := string(body)
+		if current, showErr := e.ShowConf(r.Context(), iface); showErr == nil {
+			config = awg.PreserveInterfacePrivateKey(config, current)
+		}
+		if err := e.SyncConf(r.Context(), iface, config); err != nil {
 			writeProblem(w, 500, "syncconf_failed", err.Error())
 			return
 		}
