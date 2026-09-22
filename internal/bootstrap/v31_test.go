@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"net/netip"
 	"testing"
 
 	"github.com/awg-rest/awg-rest/internal/domain"
