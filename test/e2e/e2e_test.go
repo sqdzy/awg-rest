@@ -279,6 +279,50 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	require.Equal(t, revokedPeer.DesiredRevision, revokedPeer.AppliedRevision)
 }
 
+func TestE2E_CreatePeerInheritsNodeProfile(t *testing.T) {
+	env := newTestEnv(t)
+	resp := postJSON(t, env.Server.Client(), env.Server.URL+"/v1/tenants/acme/peers",
+		env.bearerForAdmin(t), "inherit-node-profile", map[string]any{
+			"external_id": "inherit-node-profile",
+		})
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	defer resp.Body.Close()
+
+	var created api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	require.Equal(t, env.Profile.ID.String(), created.ProfileID)
+}
+
+func TestE2E_CreatePeerRejectsProfileDifferentFromNode(t *testing.T) {
+	env := newTestEnv(t)
+	other, err := env.Service.Profiles.Insert(context.Background(), domain.ProtocolProfile{
+		Name: "other-v2", ProtocolVersion: domain.ProtocolV2,
+		Jc: 5, Jmin: 10, Jmax: 50, S1: 40, S2: 32,
+		H1: domain.IntRange{Min: 11_000, Max: 12_000},
+		H2: domain.IntRange{Min: 13_000, Max: 14_000},
+		H3: domain.IntRange{Min: 15_000, Max: 16_000},
+		H4: domain.IntRange{Min: 17_000, Max: 18_000},
+	})
+	require.NoError(t, err)
+
+	resp := postJSON(t, env.Server.Client(), env.Server.URL+"/v1/tenants/acme/peers",
+		env.bearerForAdmin(t), "reject-profile-mismatch", map[string]any{
+			"external_id":  "wrong-profile",
+			"profile_name": other.Name,
+		})
+	require.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+	defer resp.Body.Close()
+
+	var problem map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&problem))
+	require.Equal(t, "validation_failed", problem["code"])
+
+	var count int
+	require.NoError(t, env.DB.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM peers WHERE external_id = 'wrong-profile'`).Scan(&count))
+	require.Zero(t, count)
+}
+
 func TestE2E_TenantIsolation(t *testing.T) {
 	env := newTestEnv(t)
 	client := env.Server.Client()
