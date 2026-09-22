@@ -255,6 +255,19 @@ func (p ProtocolProfile) Validate() error {
 				Message: "must be a base64-encoded 32-byte key for v3.1",
 			})
 		}
+		for _, padding := range []struct {
+			name string
+			v    int
+		}{
+			{"s1", p.S1}, {"s2", p.S2}, {"s3", p.S3}, {"s4", p.S4},
+		} {
+			if padding.v < 12 {
+				errs = append(errs, ValidationError{
+					Field: padding.name, Code: "header_protection_padding",
+					Message: "must be at least 12 when HeaderProtectionKey is enabled",
+				})
+			}
+		}
 		for _, rr := range []struct {
 			name string
 			r    Uint16Range
