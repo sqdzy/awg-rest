@@ -52,6 +52,25 @@ FROM vpn_nodes WHERE id = $1`
 	return &out, nil
 }
 
+// GetByHostname fetches a node by its stable operator-facing hostname.
+func (r *Nodes) GetByHostname(ctx context.Context, hostname string) (*domain.Node, error) {
+	const q = `
+SELECT id, profile_id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at
+FROM vpn_nodes WHERE hostname = $1`
+	var out domain.Node
+	row := r.DB.Pool.QueryRow(ctx, q, hostname)
+	if err := row.Scan(
+		&out.ID, &out.ProfileID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
+		&out.InterfaceName, &out.ServerPublicKey, &out.Status, &out.AgentLastSeenAt, &out.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return &out, nil
+}
+
 // MarkSeen records that the agent for node has just reported.
 func (r *Nodes) MarkSeen(ctx context.Context, id uuid.UUID, status string) error {
 	_, err := r.DB.Pool.Exec(ctx,
