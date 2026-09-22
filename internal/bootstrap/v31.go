@@ -308,6 +308,9 @@ func createManagedV31Node(
 	var privateKey, publicKey string
 
 	if raw, err := os.ReadFile(configPath); err == nil {
+		if err := requirePrivateConfigMode(configPath); err != nil {
+			return nil, err
+		}
 		privateKey = awg.InterfaceValue(string(raw), "PrivateKey")
 		if privateKey == "" {
 			return nil, fmt.Errorf("orphan V3.1 bootstrap config %s has no PrivateKey", configPath)
@@ -358,6 +361,9 @@ func verifyManagedBootstrapConfig(d V31Defaults, pool netip.Prefix, profile doma
 		}
 		return fmt.Errorf("read V3.1 bootstrap config %s: %w", path, err)
 	}
+	if err := requirePrivateConfigMode(path); err != nil {
+		return err
+	}
 	privateKey := awg.InterfaceValue(string(raw), "PrivateKey")
 	if privateKey == "" {
 		return fmt.Errorf("V3.1 bootstrap config %s has no PrivateKey", path)
@@ -392,6 +398,9 @@ func writeV31BootstrapConf(d V31Defaults, pool netip.Prefix, privateKey string, 
 		return err
 	}
 	if err := os.MkdirAll(d.BootstrapConfDir, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(d.BootstrapConfDir, 0o700); err != nil {
 		return err
 	}
 	path := filepath.Join(d.BootstrapConfDir, d.NodeIface+".conf")
@@ -453,9 +462,9 @@ func disableManagedV31Provisioning(ctx context.Context, db *repo.DB, d V31Defaul
 	if err != nil {
 		return fmt.Errorf("inspect disabled V3.1 rollout profile: %w", err)
 	}
-	if profile.ProtocolVersion != domain.ProtocolV31 || profile.Name != d.ProfileName {
-		// The configured rollout hostname belongs to something else; do not
-		// mutate an unrelated node while rollout is disabled.
+	if profile.ProtocolVersion != domain.ProtocolV31 {
+		// The configured rollout hostname belongs to a non-V3.1 node; do not
+		// mutate unrelated state while rollout is disabled.
 		return nil
 	}
 	if node.AcceptNewPeers {
@@ -464,6 +473,17 @@ func disableManagedV31Provisioning(ctx context.Context, db *repo.DB, d V31Defaul
 		}
 		logger.InfoContext(ctx, "disabled new peer provisioning on V3.1 rollout node",
 			"hostname", node.Hostname, "id", node.ID)
+	}
+	return nil
+}
+
+func requirePrivateConfigMode(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat private bootstrap config %s: %w", path, err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		return fmt.Errorf("private bootstrap config %s must have mode 0600, got %04o", path, info.Mode().Perm())
 	}
 	return nil
 }
