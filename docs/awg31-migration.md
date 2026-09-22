@@ -68,7 +68,8 @@ with multiple distinct `profile_id` values.
 
 Keep all V2 columns. Add nullable V3.1-only fields so legacy rows remain valid.
 Range-valued 3.x parameters are stored as min/max integer pairs. Boolean toggles
-are nullable for legacy rows and required by V3.1 validation.
+are nullable for legacy rows; V3.1 inserts persist concrete true/false values and
+the renderer emits explicit `on`/`off` settings.
 
 ## API contract
 
