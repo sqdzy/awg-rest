@@ -98,6 +98,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID: &profile.ID,
+		IsDefault: true,
 		Region: "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
 		BasePort: 585, InterfaceName: "awg0",
 		ServerPublicKey: serverKP.PublicKey,
