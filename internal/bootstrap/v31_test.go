@@ -104,6 +104,7 @@ func TestEnvV31DefaultsDerivesPlacementFromBase(t *testing.T) {
 	require.Equal(t, defaultV31NodeBasePort, got.NodeBasePort)
 	require.Equal(t, "/state/bootstrap", got.BootstrapConfDir)
 	require.False(t, got.EnableNAT)
+	require.True(t, got.AcceptNewPeers)
 	require.Equal(t, "ens3", got.EgressIface)
 }
 
