@@ -188,6 +188,7 @@ func validV31() ProtocolProfile {
 		RejectAfterTime:        Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:     Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 	}
