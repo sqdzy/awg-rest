@@ -465,7 +465,8 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.True(t, ran)
 
 	require.Len(t, env.Executor.Snapshot("awg0"), 1, "V3.1 reconcile must not alter V2 interface")
-	require.Len(t, env.Executor.Snapshot("awg31"), 1)
+	require.Len(t, env.Executor.Snapshot("awg31"), 2,
+		"both V3.1 peers, including the client-owned-key peer, must reconcile onto awg31")
 }
 
 func TestE2E_Auth_Rejects(t *testing.T) {
