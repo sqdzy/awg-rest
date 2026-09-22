@@ -53,6 +53,7 @@ ListenPort = 51820
 [Peer]
 PublicKey = pX
 PresharedKey = PSK
+HeaderProtectionKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
 AllowedIPs = 10.0.0.5/32
 PersistentKeepalive = 25
 `
@@ -65,6 +66,7 @@ PersistentKeepalive = 25
 	require.Equal(t, 51820, iface.ListenPort)
 	require.Len(t, peers, 1)
 	require.Equal(t, "pX", peers[0].PublicKey)
+	require.Empty(t, peers[0].PresharedKey, "node-agent dump must not expose peer preshared keys")
 
 	// Set a new peer; remove the original.
 	require.NoError(t, client.SetPeer(ctx, "awg0", awg.PeerSpec{
@@ -82,8 +84,10 @@ PersistentKeepalive = 25
 	require.Contains(t, conf, "[Interface]")
 	require.Contains(t, conf, "PrivateKey = (redacted)")
 	require.Contains(t, conf, "PresharedKey = (redacted)")
+	require.Contains(t, conf, "HeaderProtectionKey = (redacted)")
 	require.NotContains(t, conf, "PrivateKey = PRIV")
 	require.NotContains(t, conf, "PresharedKey = PSK")
+	require.NotContains(t, conf, "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=")
 }
 
 func TestAgent_PropagatesError(t *testing.T) {
