@@ -17,6 +17,7 @@ import (
 	"github.com/awg-rest/awg-rest/internal/domain"
 	"github.com/awg-rest/awg-rest/internal/render"
 	"github.com/awg-rest/awg-rest/internal/repo"
+	"github.com/google/uuid"
 )
 
 const defaultV31NodeBasePort = 38824
@@ -395,12 +396,26 @@ func renderV31BootstrapConf(d V31Defaults, pool netip.Prefix, privateKey string,
 	}, profile, nil), nil
 }
 
-func ensureManagedV31Pool(ctx context.Context, pools *repo.Pools, tenantID, nodeID domainUUID, want netip.Prefix) error {
-	return nil
+func ensureManagedV31Pool(ctx context.Context, pools *repo.Pools, tenantID, nodeID uuid.UUID, want netip.Prefix) error {
+	existing, err := pools.CIDRsByNode(ctx, nodeID)
+	if err != nil {
+		return fmt.Errorf("load V3.1 rollout node pools: %w", err)
+	}
+	switch len(existing) {
+	case 0:
+		if _, err := pools.CreatePool(ctx, tenantID, nodeID, want); err != nil {
+			return fmt.Errorf("create V3.1 rollout pool %s: %w", want, err)
+		}
+		return nil
+	case 1:
+		if existing[0] != want {
+			return fmt.Errorf("existing V3.1 node pool is %s, want %s; refusing automatic pool replacement", existing[0], want)
+		}
+		return nil
+	default:
+		return fmt.Errorf("existing V3.1 node has %d address pools (%v); managed rollout requires exactly one", len(existing), existing)
+	}
 }
-
-// domainUUID is an alias only to keep the rollout helper signatures readable.
-type domainUUID = [16]byte
 
 func endpointAtPort(endpoint string, port int) string {
 	endpoint = strings.TrimSpace(endpoint)
