@@ -114,3 +114,92 @@ jobs:
             -test.v \
             -test.timeout=600s \
             -test.run="^TestRealAWG_ProtocolCompatibility$"
+      - name: validate V3.1 Compose override
+        run: docker compose -f compose.yaml -f compose.awg31.yaml config -q
+      - name: all-in-one parallel V3.1 rollout smoke
+        shell: bash
+        env:
+          AWG_REST_IMAGE: awg-rest-all-in-one:ci
+          BOOTSTRAP_NODE_ENDPOINT: 127.0.0.1
+          AWG_API_BIND: 127.0.0.1:18081
+          AWG_UDP_BIND: 39923
+          AWG_UDP_PORT: 38823
+          AWG_V31_UDP_BIND: 39924
+          AWG_V31_UDP_PORT: 38824
+        run: |
+          set -euo pipefail
+          compose=(docker compose -p awg31-ci -f compose.yaml -f compose.awg31.yaml)
+          cleanup() {
+            "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          cleanup
+
+          "${compose[@]}" up -d
+
+          ready=0
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:18081/health/ready >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            "${compose[@]}" logs --no-color awg-rest
+            exit 1
+          fi
+
+          interfaces="$("${compose[@]}" exec -T awg-rest awg show interfaces)"
+          grep -qw awg0 <<<"$interfaces"
+          grep -qw awg31 <<<"$interfaces"
+
+          token="$("${compose[@]}" exec -T awg-rest /awg-api -dev-token)"
+          create_body="$(
+            curl -fsS -X POST "http://127.0.0.1:18081/v1/tenants/default/peers" \
+              -H "Authorization: Bearer $token" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: ci-v31-rollout-create" \
+              -d '{"external_id":"ci-v31-rollout","node_hostname":"awg-node-31","profile_name":"default-v3.1"}'
+          )"
+
+          operation_id="$(
+            CREATE_BODY="$create_body" python3 - <<'PY'
+          import json, os
+          body = json.loads(os.environ["CREATE_BODY"])
+          assert body["client_config"], "missing one-time client config"
+          assert "HeaderProtectionKey = " in body["client_config"], "not a V3.1 client config"
+          assert body["node_id"], "missing node_id"
+          print(body["operation_id"])
+          PY
+          )"
+
+          applied=0
+          for _ in {1..30}; do
+            op_body="$(
+              curl -fsS "http://127.0.0.1:18081/v1/operations/$operation_id" \
+                -H "Authorization: Bearer $token"
+            )"
+            status="$(
+              OP_BODY="$op_body" python3 - <<'PY'
+          import json, os
+          print(json.loads(os.environ["OP_BODY"])["status"])
+          PY
+            )"
+            if [[ "$status" == "applied" ]]; then
+              applied=1
+              break
+            fi
+            if [[ "$status" == "failed_terminal" ]]; then
+              printf '%s\n' "$op_body"
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$applied" != "1" ]]; then
+            "${compose[@]}" logs --no-color awg-rest
+            exit 1
+          fi
+
+          peers="$("${compose[@]}" exec -T awg-rest awg show awg31 peers)"
+          [[ -n "$peers" ]]
