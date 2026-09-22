@@ -37,6 +37,7 @@ type V31Defaults struct {
 	PoolCIDR         string
 	BootstrapConfDir string
 	EnableNAT        bool
+	AcceptNewPeers   bool
 	EgressIface      string
 }
 
@@ -56,6 +57,7 @@ func EnvV31Defaults(base Defaults) V31Defaults {
 		PoolCIDR:         env("BOOTSTRAP_V31_POOL_CIDR", "10.201.0.0/24"),
 		BootstrapConfDir: env("BOOTSTRAP_V31_CONF_DIR", base.BootstrapConfDir),
 		EnableNAT:        envBool("BOOTSTRAP_V31_ENABLE_NAT", base.EnableNAT),
+		AcceptNewPeers:   envBool("BOOTSTRAP_V31_ACCEPT_NEW_PEERS", true),
 		EgressIface:      env("BOOTSTRAP_V31_EGRESS_IFACE", base.EgressIface),
 	}
 }
@@ -70,14 +72,14 @@ func EnsureV31Rollout(
 	d V31Defaults,
 	logger *slog.Logger,
 ) error {
-	if !d.Enabled {
-		return nil
-	}
 	if db == nil {
 		return fmt.Errorf("db is nil")
 	}
 	if logger == nil {
 		logger = slog.Default()
+	}
+	if !d.Enabled {
+		return disableManagedV31Provisioning(ctx, db, d, logger)
 	}
 	if d.TenantSlug != base.TenantSlug {
 		return fmt.Errorf("BOOTSTRAP_V31_TENANT_SLUG %q must match base bootstrap tenant %q for all-in-one rollout", d.TenantSlug, base.TenantSlug)
@@ -184,6 +186,12 @@ func EnsureV31Rollout(
 		return fmt.Errorf("load V3.1 rollout node: %w", err)
 	}
 
+	if node.AcceptNewPeers != d.AcceptNewPeers {
+		if err := nodes.SetAcceptNewPeers(ctx, node.ID, d.AcceptNewPeers); err != nil {
+			return fmt.Errorf("set V3.1 node provisioning gate: %w", err)
+		}
+		node.AcceptNewPeers = d.AcceptNewPeers
+	}
 	if err := ensureManagedV31Pool(ctx, pools, tenant.ID, node.ID, v31Pool); err != nil {
 		return err
 	}
@@ -192,7 +200,8 @@ func EnsureV31Rollout(
 		"node", node.Hostname,
 		"interface", node.InterfaceName,
 		"endpoint", node.PublicEndpoint,
-		"pool", v31Pool.String())
+		"pool", v31Pool.String(),
+		"accept_new_peers", node.AcceptNewPeers)
 	return nil
 }
 
@@ -326,6 +335,7 @@ func createManagedV31Node(
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID:       &profile.ID,
 		IsDefault:       false,
+		AcceptNewPeers:  d.AcceptNewPeers,
 		Region:          d.NodeRegion,
 		Hostname:        d.NodeHostname,
 		PublicEndpoint:  endpoint,
@@ -425,6 +435,37 @@ func ensureManagedV31Pool(ctx context.Context, pools *repo.Pools, tenantID, node
 	default:
 		return fmt.Errorf("existing V3.1 node has %d address pools (%v); managed rollout requires exactly one", len(existing), existing)
 	}
+}
+
+func disableManagedV31Provisioning(ctx context.Context, db *repo.DB, d V31Defaults, logger *slog.Logger) error {
+	nodes := &repo.Nodes{DB: db}
+	node, err := nodes.GetByHostname(ctx, d.NodeHostname)
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect disabled V3.1 rollout node: %w", err)
+	}
+	if node.ProfileID == nil {
+		return nil
+	}
+	profile, err := (&repo.Profiles{DB: db}).GetByID(ctx, *node.ProfileID)
+	if err != nil {
+		return fmt.Errorf("inspect disabled V3.1 rollout profile: %w", err)
+	}
+	if profile.ProtocolVersion != domain.ProtocolV31 || profile.Name != d.ProfileName {
+		// The configured rollout hostname belongs to something else; do not
+		// mutate an unrelated node while rollout is disabled.
+		return nil
+	}
+	if node.AcceptNewPeers {
+		if err := nodes.SetAcceptNewPeers(ctx, node.ID, false); err != nil {
+			return fmt.Errorf("disable V3.1 peer provisioning: %w", err)
+		}
+		logger.InfoContext(ctx, "disabled new peer provisioning on V3.1 rollout node",
+			"hostname", node.Hostname, "id", node.ID)
+	}
+	return nil
 }
 
 func endpointAtPort(endpoint string, port int) string {
