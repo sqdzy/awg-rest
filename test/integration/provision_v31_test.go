@@ -49,6 +49,7 @@ func TestProvisionV31Node_CreateOnlyAndAtomic(t *testing.T) {
 	require.Equal(t, domain.IntRange{Min: 1, Max: 1}, profile.H1)
 	require.Equal(t, domain.IntRange{Min: 4, Max: 4}, profile.H4)
 	require.Equal(t, domain.Uint16Range{Min: 100, Max: 120}, profile.RekeyAfterTime)
+	require.Equal(t, domain.Uint16Range{Min: 25, Max: 35}, profile.PersistentKeepalive)
 	require.True(t, profile.RandomTrailers)
 	require.True(t, profile.DisableCookies)
 	require.True(t, profile.ContentPaddingAddition.IsZero(),
