@@ -86,6 +86,7 @@ func seedFixtures(ctx context.Context, t *testing.T, db *repo.DB) fixtures {
 
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID: &prof.ID,
+		IsDefault: true,
 		Region: "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
 		BasePort: 585, InterfaceName: "awg0",
 		ServerPublicKey: "U2VydmVyUHVibGljS2V5MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY=",
