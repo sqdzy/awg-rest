@@ -49,7 +49,8 @@ func (s *Service) now() time.Time {
 type CreatePeerRequest struct {
 	ExternalID  string     `json:"external_id"`
 	DisplayName string     `json:"display_name"`
-	NodeID      *string    `json:"node_id,omitempty"`
+	NodeID       *string    `json:"node_id,omitempty"`
+	NodeHostname *string    `json:"node_hostname,omitempty"`
 	ProfileID   *string    `json:"profile_id,omitempty"`
 	ProfileName *string    `json:"profile_name,omitempty"`
 	PublicKey   *string    `json:"public_key,omitempty"`
@@ -91,8 +92,15 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 	// profile. Per-peer profile selectors are accepted only as compatibility
 	// assertions and must match the node-owned profile.
 	var node *domain.Node
-	if req.NodeID != nil {
-		id, err := uuid.Parse(*req.NodeID)
+	if req.NodeID != nil && req.NodeHostname != nil {
+		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
+			Field: "node_id", Code: "conflict",
+			Message: "node_id and node_hostname are mutually exclusive",
+		}}
+	}
+	switch {
+	case req.NodeID != nil:
+		id, err := uuid.Parse(strings.TrimSpace(*req.NodeID))
 		if err != nil {
 			return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "node_id", Code: "invalid", Message: "must be a UUID"}}
 		}
@@ -100,7 +108,16 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		if err != nil {
 			return CreatePeerResponse{}, 0, err
 		}
-	} else {
+	case req.NodeHostname != nil:
+		hostname := strings.TrimSpace(*req.NodeHostname)
+		if hostname == "" {
+			return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "node_hostname", Code: "required", Message: "must not be empty"}}
+		}
+		node, err = s.Nodes.GetByHostname(ctx, hostname)
+		if err != nil {
+			return CreatePeerResponse{}, 0, err
+		}
+	default:
 		node, err = s.Nodes.PickFirst(ctx)
 		if err != nil {
 			return CreatePeerResponse{}, 0, err
