@@ -55,3 +55,67 @@ func TestParseShowDump_Malformed(t *testing.T) {
 	_, _, err := ParseShowDump("only\ttwo\n")
 	require.Error(t, err)
 }
+
+
+func TestParseShowDump_AWGV2ExtendedInterfaceRow(t *testing.T) {
+	t.Parallel()
+	in := strings.Join([]string{
+		strings.Join([]string{
+			"sPriv", "sPub", "51820",
+			"5", "10", "50", "40", "32", "12", "12",
+			"1000-1100", "2000-2100", "3000-3100", "4000-4100",
+			"(null)", "(null)", "(null)", "(null)", "(null)",
+			"0x2a",
+		}, "\t"),
+		"pPub\t(none)\t1.2.3.4:51820\t10.0.0.2/32\t1700000000\t1024\t2048\t25",
+	}, "\n")
+
+	iface, peers, err := ParseShowDump(in)
+	require.NoError(t, err)
+	require.Equal(t, "sPub", iface.PublicKey)
+	require.Equal(t, 51820, iface.ListenPort)
+	require.Equal(t, 42, iface.FwMark)
+	require.Len(t, peers, 1)
+	require.Equal(t, 25, peers[0].KeepaliveSecs)
+	require.Equal(t, "25", peers[0].KeepaliveRange)
+}
+
+func TestParseShowDump_AWGV31ExtendedInterfaceAndKeepaliveRange(t *testing.T) {
+	t.Parallel()
+	in := strings.Join([]string{
+		strings.Join([]string{
+			"sPriv", "sPub", "51972",
+			"5", "10", "50", "12", "12", "12", "12",
+			"1", "2", "3", "4",
+			"(null)", "(null)", "(null)", "(null)", "(null)",
+			"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+			"10-100", "100-120", "3-7", "150-180", "5-15", "15-20",
+			"on", "on", "off",
+		}, "\t"),
+		"pPub\t(none)\t192.0.2.2:51972\t10.251.31.2/32\t1700000001\t4096\t8192\t25-35",
+	}, "\n")
+
+	iface, peers, err := ParseShowDump(in)
+	require.NoError(t, err)
+	require.Equal(t, "sPub", iface.PublicKey)
+	require.Equal(t, 51972, iface.ListenPort)
+	require.Zero(t, iface.FwMark)
+	require.Len(t, peers, 1)
+	require.Zero(t, peers[0].KeepaliveSecs,
+		"legacy scalar must stay zero for a ranged runtime value")
+	require.Equal(t, "25-35", peers[0].KeepaliveRange)
+	require.Equal(t, int64(4096), peers[0].RxBytes)
+	require.Equal(t, int64(8192), peers[0].TxBytes)
+	require.False(t, peers[0].LastHandshake.IsZero())
+}
+
+func TestParseShowDump_RejectsMalformedKeepaliveRange(t *testing.T) {
+	t.Parallel()
+	in := strings.Join([]string{
+		"sPriv\tsPub\t51820\toff",
+		"pPub\t(none)\t(none)\t10.0.0.2/32\t0\t0\t0\t35-25",
+	}, "\n")
+	_, _, err := ParseShowDump(in)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "keepalive range")
+}
