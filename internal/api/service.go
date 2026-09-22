@@ -87,28 +87,9 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		return CreatePeerResponse{}, 0, err
 	}
 
-	// Profile resolution.
-	var profile *domain.ProtocolProfile
-	switch {
-	case req.ProfileID != nil:
-		id, err := uuid.Parse(*req.ProfileID)
-		if err != nil {
-			return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "profile_id", Code: "invalid", Message: "must be a UUID"}}
-		}
-		profile, err = s.Profiles.GetByID(ctx, id)
-		if err != nil {
-			return CreatePeerResponse{}, 0, err
-		}
-	case req.ProfileName != nil:
-		profile, err = s.Profiles.GetByName(ctx, *req.ProfileName)
-		if err != nil {
-			return CreatePeerResponse{}, 0, err
-		}
-	default:
-		return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "profile_id", Code: "required", Message: "profile_id or profile_name is required"}}
-	}
-
-	// Node resolution.
+	// Node resolution comes first because the node/interface owns the protocol
+	// profile. Per-peer profile selectors are accepted only as compatibility
+	// assertions and must match the node-owned profile.
 	var node *domain.Node
 	if req.NodeID != nil {
 		id, err := uuid.Parse(*req.NodeID)
@@ -124,6 +105,19 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		if err != nil {
 			return CreatePeerResponse{}, 0, err
 		}
+	}
+	if node.ProfileID == nil {
+		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
+			Field: "node_id", Code: "profile_unassigned",
+			Message: "node has no protocol profile assigned",
+		}}
+	}
+	profile, err := s.Profiles.GetByID(ctx, *node.ProfileID)
+	if err != nil {
+		return CreatePeerResponse{}, 0, err
+	}
+	if err := validateRequestedProfile(*profile, req); err != nil {
+		return CreatePeerResponse{}, 0, err
 	}
 
 	// Validate any client-supplied public key now; key *generation* must
@@ -407,7 +401,13 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 	if err != nil {
 		return "", err
 	}
-	profile, err := s.Profiles.GetByID(ctx, peer.ProfileID)
+	if node.ProfileID == nil {
+		return "", domain.ValidationErrors{{
+			Field: "node_id", Code: "profile_unassigned",
+			Message: "node has no protocol profile assigned",
+		}}
+	}
+	profile, err := s.Profiles.GetByID(ctx, *node.ProfileID)
 	if err != nil {
 		return "", err
 	}
@@ -419,6 +419,28 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 		Keepalive:       25,
 	}, *profile)
 	return out, nil
+}
+
+func validateRequestedProfile(profile domain.ProtocolProfile, req CreatePeerRequest) error {
+	if req.ProfileID != nil {
+		id, err := uuid.Parse(strings.TrimSpace(*req.ProfileID))
+		if err != nil {
+			return domain.ValidationErrors{{Field: "profile_id", Code: "invalid", Message: "must be a UUID"}}
+		}
+		if id != profile.ID {
+			return domain.ValidationErrors{{
+				Field: "profile_id", Code: "node_profile_mismatch",
+				Message: "profile_id must match the selected node profile",
+			}}
+		}
+	}
+	if req.ProfileName != nil && strings.TrimSpace(*req.ProfileName) != profile.Name {
+		return domain.ValidationErrors{{
+			Field: "profile_name", Code: "node_profile_mismatch",
+			Message: "profile_name must match the selected node profile",
+		}}
+	}
+	return nil
 }
 
 // EnsureTenant is a convenience for bootstrapping or tests.
