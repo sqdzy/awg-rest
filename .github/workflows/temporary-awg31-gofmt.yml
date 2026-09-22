@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - feat/awg31-migration
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   gofmt:
+    if: github.event_name == 'push' || github.head_ref == 'feat/awg31-migration'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
