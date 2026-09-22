@@ -1,5 +1,5 @@
-// Package render produces AmneziaWG configuration text. It supports both
-// V1 and V2 protocol profiles, and renders interface-side ([Interface] +
+// Package render produces AmneziaWG configuration text. It supports
+// V1, V2, and V3.1 protocol profiles, and renders interface-side ([Interface] +
 // many [Peer] blocks) as well as client-side configs (single [Peer] for
 // the server).
 //
