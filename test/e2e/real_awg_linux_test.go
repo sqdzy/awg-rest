@@ -229,8 +229,7 @@ func stripQuickConfig(t *testing.T, path string) string {
 	// Client rendering intentionally includes empty I1-I5 keys for import
 	// compatibility, while awg setconf rejects empty special-junk values.
 	var b strings.Builder
-	for _, raw := range strings.SplitAfter(string(out), "
-") {
+	for _, raw := range strings.SplitAfter(string(out), "\n") {
 		line := strings.TrimSpace(raw)
 		key, value, ok := strings.Cut(line, "=")
 		if ok && strings.TrimSpace(value) == "" {
