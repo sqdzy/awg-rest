@@ -257,3 +257,35 @@ func TestProtocolProfile_JSONDoesNotExposeHeaderProtectionKey(t *testing.T) {
 	require.NotContains(t, string(b), "header_protection_key")
 	require.NotContains(t, string(b), p.HeaderProtectionKey)
 }
+
+
+func TestProtocolProfile_V31HeaderProtectionRequiresTwelveBytePaddings(t *testing.T) {
+	t.Parallel()
+	for _, field := range []string{"s1", "s2", "s3", "s4"} {
+		t.Run(field, func(t *testing.T) {
+			p := validV31()
+			switch field {
+			case "s1":
+				p.S1 = 11
+			case "s2":
+				p.S2 = 11
+			case "s3":
+				p.S3 = 11
+			case "s4":
+				p.S4 = 11
+			}
+			err := p.Validate()
+			require.Error(t, err)
+			ve, ok := err.(ValidationErrors)
+			require.True(t, ok)
+			var found bool
+			for _, item := range ve {
+				if item.Field == field && item.Code == "header_protection_padding" {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "expected header_protection_padding error for %s", field)
+		})
+	}
+}
