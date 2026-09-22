@@ -64,6 +64,7 @@ func ProvisionV31Node(ctx context.Context, db *repo.DB, opts V31NodeOptions, log
 	if logger == nil {
 		logger = slog.Default()
 	}
+	opts = normalizeV31NodeOptions(opts)
 	if err := validateV31NodeOptions(opts); err != nil {
 		return nil, err
 	}
@@ -202,6 +203,19 @@ func defaultV31Profile(name, headerProtectionKey string) domain.ProtocolProfile 
 		DisableCookies:       true,
 		ListenPortPolicy:     "fixed",
 	}
+}
+
+func normalizeV31NodeOptions(opts V31NodeOptions) V31NodeOptions {
+	opts.TenantSlug = strings.TrimSpace(opts.TenantSlug)
+	opts.ProfileName = strings.TrimSpace(opts.ProfileName)
+	opts.NodeRegion = strings.TrimSpace(opts.NodeRegion)
+	opts.NodeHostname = strings.TrimSpace(opts.NodeHostname)
+	opts.NodeEndpoint = strings.TrimSpace(opts.NodeEndpoint)
+	opts.NodeIface = strings.TrimSpace(opts.NodeIface)
+	opts.PoolCIDR = strings.TrimSpace(opts.PoolCIDR)
+	opts.BootstrapConfDir = strings.TrimSpace(opts.BootstrapConfDir)
+	opts.EgressIface = strings.TrimSpace(opts.EgressIface)
+	return opts
 }
 
 func validateV31NodeOptions(opts V31NodeOptions) error {
