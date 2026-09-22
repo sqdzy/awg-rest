@@ -28,7 +28,7 @@ type Peer struct {
 	DisplayName string    `json:"display_name"`
 
 	PublicKey       string     `json:"public_key"`
-	PresharedKeyRef *string    `json:"preshared_key_ref,omitempty"`
+	PresharedKeyRef *string    `json:"-"`
 
 	AllowedIP netip.Prefix `json:"allowed_ip"` // /32 or /128
 
