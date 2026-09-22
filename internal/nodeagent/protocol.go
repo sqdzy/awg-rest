@@ -30,13 +30,13 @@ type PeerSpec struct {
 
 // PeerRuntime mirrors awg.PeerRuntime.
 type PeerRuntime struct {
-	PublicKey     string    `json:"public_key"`
-	PresharedKey  string    `json:"-"`
-	Endpoint      string    `json:"endpoint,omitempty"`
-	AllowedIPs    []string  `json:"allowed_ips"`
-	LastHandshake time.Time `json:"last_handshake,omitempty"`
-	RxBytes       int64     `json:"rx_bytes"`
-	TxBytes       int64     `json:"tx_bytes"`
+	PublicKey      string    `json:"public_key"`
+	PresharedKey   string    `json:"-"`
+	Endpoint       string    `json:"endpoint,omitempty"`
+	AllowedIPs     []string  `json:"allowed_ips"`
+	LastHandshake  time.Time `json:"last_handshake,omitempty"`
+	RxBytes        int64     `json:"rx_bytes"`
+	TxBytes        int64     `json:"tx_bytes"`
 	KeepaliveSecs  int       `json:"keepalive_secs,omitempty"`
 	KeepaliveRange string    `json:"keepalive_range,omitempty"`
 }

@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -151,7 +151,6 @@ func main() {
 	_ = built.Server.Shutdown(shutdownCtx)
 }
 
-
 func exitCLI(step string, err error) {
 	fmt.Fprintf(os.Stderr, "awg-api: %s: %v\n", step, err)
 	os.Exit(1)
@@ -191,7 +190,6 @@ func buildExecutor(cfg *config.Config, logger *slog.Logger) awg.Executor {
 		return awg.NewFakeExecutor(time.Time{})
 	}
 }
-
 
 func endpointHost(endpoint string) string {
 	endpoint = strings.TrimSpace(endpoint)

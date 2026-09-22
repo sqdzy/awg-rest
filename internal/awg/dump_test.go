@@ -56,7 +56,6 @@ func TestParseShowDump_Malformed(t *testing.T) {
 	require.Error(t, err)
 }
 
-
 func TestParseShowDump_AWGV2ExtendedInterfaceRow(t *testing.T) {
 	t.Parallel()
 	in := strings.Join([]string{

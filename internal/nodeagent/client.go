@@ -157,7 +157,7 @@ func (r *RemoteExecutor) ShowDump(ctx context.Context, iface string) (awg.Interf
 		out = append(out, awg.PeerRuntime{
 			PublicKey: p.PublicKey, PresharedKey: p.PresharedKey,
 			Endpoint: p.Endpoint, AllowedIPs: p.AllowedIPs,
-			LastHandshake: p.LastHandshake,
+			LastHandshake:  p.LastHandshake,
 			RxBytes:        p.RxBytes,
 			TxBytes:        p.TxBytes,
 			KeepaliveSecs:  p.KeepaliveSecs,

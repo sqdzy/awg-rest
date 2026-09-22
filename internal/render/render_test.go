@@ -127,18 +127,17 @@ func TestServer_StableHash(t *testing.T) {
 	require.Equal(t, Server(i1, sampleV2Profile(), p1), Server(i2, sampleV2Profile(), p2))
 }
 
-
 func sampleV31Profile() domain.ProtocolProfile {
 	return domain.ProtocolProfile{
 		Name:            "default-v31",
 		ProtocolVersion: domain.ProtocolV31,
-		Jc: 5, Jmin: 10, Jmax: 50,
+		Jc:              5, Jmin: 10, Jmax: 50,
 		S1: 12, S2: 12, S3: 12, S4: 12,
-		H1: domain.IntRange{Min: 1, Max: 1},
-		H2: domain.IntRange{Min: 2, Max: 2},
-		H3: domain.IntRange{Min: 3, Max: 3},
-		H4: domain.IntRange{Min: 4, Max: 4},
-		I1: "<packet>",
+		H1:                     domain.IntRange{Min: 1, Max: 1},
+		H2:                     domain.IntRange{Min: 2, Max: 2},
+		H3:                     domain.IntRange{Min: 3, Max: 3},
+		H4:                     domain.IntRange{Min: 4, Max: 4},
+		I1:                     "<packet>",
 		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
 		ContentPaddingAddition: domain.Uint16Range{Min: 10, Max: 100},
 		RekeyAfterTime:         domain.Uint16Range{Min: 100, Max: 120},
@@ -146,7 +145,7 @@ func sampleV31Profile() domain.ProtocolProfile {
 		RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
-		PersistentKeepalive:     domain.Uint16Range{Min: 25, Max: 35},
+		PersistentKeepalive:    domain.Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 	}

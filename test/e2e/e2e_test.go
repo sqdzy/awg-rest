@@ -98,7 +98,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID: &profile.ID,
-		Region: "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
+		Region:    "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
 		BasePort: 585, InterfaceName: "awg0",
 		ServerPublicKey: serverKP.PublicKey,
 	})
@@ -382,11 +382,11 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 		Name: "default-v31", ProtocolVersion: domain.ProtocolV31,
 		Jc: 5, Jmin: 10, Jmax: 50,
 		S1: 12, S2: 12, S3: 12, S4: 12,
-		H1: domain.IntRange{Min: 1, Max: 1},
-		H2: domain.IntRange{Min: 2, Max: 2},
-		H3: domain.IntRange{Min: 3, Max: 3},
-		H4: domain.IntRange{Min: 4, Max: 4},
-		I1: "<r 2><b 0x00ff>",
+		H1:                     domain.IntRange{Min: 1, Max: 1},
+		H2:                     domain.IntRange{Min: 2, Max: 2},
+		H3:                     domain.IntRange{Min: 3, Max: 3},
+		H4:                     domain.IntRange{Min: 4, Max: 4},
+		I1:                     "<r 2><b 0x00ff>",
 		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
 		ContentPaddingAddition: domain.Uint16Range{Min: 10, Max: 100},
 		RekeyAfterTime:         domain.Uint16Range{Min: 100, Max: 120},

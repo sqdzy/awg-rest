@@ -133,7 +133,7 @@ type ProtocolProfile struct {
 	RejectAfterTime        Uint16Range `json:"reject_after_time"`
 	KeepaliveTimeout       Uint16Range `json:"keepalive_timeout"`
 	MaxHandshakeAttempts   Uint16Range `json:"max_handshake_attempts"`
-	PersistentKeepalive     Uint16Range `json:"persistent_keepalive"`
+	PersistentKeepalive    Uint16Range `json:"persistent_keepalive"`
 	RandomTrailers         bool        `json:"random_trailers"`
 	DisableCookies         bool        `json:"disable_cookies"`
 

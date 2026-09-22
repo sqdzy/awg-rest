@@ -41,7 +41,6 @@ func TestSanitizeSyncConfDropsEmptySpecialJunk(t *testing.T) {
 	require.NotContains(t, got, "I3 = ")
 }
 
-
 func TestPreserveInterfacePrivateKey_IgnoresRedactedPlaceholder(t *testing.T) {
 	t.Parallel()
 	desired := "[Interface]\nListenPort = 51820\n"
