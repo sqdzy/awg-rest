@@ -9,13 +9,26 @@ import (
 )
 
 //go:embed schema/0001_init.sql
-var schemaSQL string
+var schemaV1 string
 
-// Migrate applies the embedded schema. For production we recommend a real
-// migration tool (golang-migrate, atlas, ariga); embedding the schema is fine
-// for tests and small deployments since every statement is `CREATE ... IF NOT
-// EXISTS`. Idempotent.
+//go:embed schema/0002_node_profile_owner.sql
+var schemaV2 string
+
+// Migrate applies the embedded migrations in order inside one transaction.
+// Production deployments can replace this lightweight runner with a dedicated
+// migration tool later; keeping each migration as an immutable file preserves
+// upgrade semantics for existing installations.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, schemaSQL)
-	return err
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	for _, migration := range []string{schemaV1, schemaV2} {
+		if _, err := tx.Exec(ctx, migration); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
