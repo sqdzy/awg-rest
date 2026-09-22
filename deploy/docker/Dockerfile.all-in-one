@@ -30,7 +30,7 @@ RUN apk add --no-cache build-base git linux-headers
 RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_TAG}" https://github.com/amnezia-vpn/amneziawg-tools.git /src/amneziawg-tools && \
     cd /src/amneziawg-tools && \
     test "$(git rev-parse HEAD)" = "${AMNEZIAWG_TOOLS_COMMIT}" && \
-    make -C src && \
+    make -C src LDFLAGS=-static && \
     mkdir -p /out && \
     cp src/wg /out/awg && \
     cp src/wg-quick/linux.bash /out/awg-quick && \
@@ -44,7 +44,7 @@ RUN apk add --no-cache git make
 RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_TAG}" https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go && \
     cd /src/amneziawg-go && \
     test "$(git rev-parse HEAD)" = "${AMNEZIAWG_GO_COMMIT}" && \
-    make && \
+    CGO_ENABLED=0 make && \
     mkdir -p /out && \
     cp amneziawg-go /out/amneziawg-go
 RUN chmod 0755 /out/amneziawg-go && ln -s amneziawg-go /out/wireguard-go
