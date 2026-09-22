@@ -64,6 +64,7 @@ type Tenant struct {
 // Node represents a VPN host that runs an AmneziaWG interface.
 type Node struct {
 	ID              uuid.UUID  `json:"id"`
+	ProfileID       *uuid.UUID `json:"profile_id,omitempty"`
 	Region          string     `json:"region"`
 	Hostname        string     `json:"hostname"`
 	Status          string     `json:"status"`
