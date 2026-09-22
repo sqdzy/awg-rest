@@ -141,7 +141,9 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 	}
 	fmt.Fprintf(&b, "AllowedIPs = %s\n", strings.Join(allowed, ", "))
 	fmt.Fprintf(&b, "Endpoint = %s\n", args.ServerEndpoint)
-	if args.Keepalive > 0 {
+	if profile.IsV31() && !profile.PersistentKeepalive.IsZero() {
+		fmt.Fprintf(&b, "PersistentKeepalive = %s\n", profile.PersistentKeepalive.String())
+	} else if args.Keepalive > 0 {
 		fmt.Fprintf(&b, "PersistentKeepalive = %d\n", args.Keepalive)
 	}
 	return b.String()
