@@ -40,9 +40,14 @@ func BuildAPI(ctx context.Context, cfg *config.Config) (*Built, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	if err := bootstrap.RunIfEmpty(ctx, db, bootstrap.EnvDefaults(), logger); err != nil {
+	baseBootstrap := bootstrap.EnvDefaults()
+	if err := bootstrap.RunIfEmpty(ctx, db, baseBootstrap, logger); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("bootstrap: %w", err)
+	}
+	if err := bootstrap.EnsureV31Rollout(ctx, db, baseBootstrap, bootstrap.EnvV31Defaults(baseBootstrap), logger); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("bootstrap V3.1 rollout: %w", err)
 	}
 
 	svc := &api.Service{
