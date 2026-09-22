@@ -258,4 +258,6 @@ Important `.env` values:
 Repository code is MIT licensed. The all-in-one image bundles
 `amneziawg-tools` (GPL-2.0-only) and `amneziawg-go` (MIT). Their license
 texts are included under `/usr/share/licenses/`, and the Dockerfile pins the
-exact upstream tags and commit SHAs used to build the bundled binaries.
+exact upstream tags and commit SHAs used to build the bundled binaries. The
+corresponding `amneziawg-tools` source tree for the shipped GPL binary is also
+included in the image at `/usr/share/src/amneziawg-tools`.
