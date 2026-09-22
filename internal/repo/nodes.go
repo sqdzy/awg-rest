@@ -16,13 +16,13 @@ type Nodes struct{ DB *DB }
 // Insert creates a new VPN node entry.
 func (r *Nodes) Insert(ctx context.Context, n domain.Node) (*domain.Node, error) {
 	const q = `
-INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key, profile_id, is_default, accept_new_peers)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key, profile_id, is_default)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 RETURNING id, profile_id, is_default, accept_new_peers, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q,
 		n.Region, n.Hostname, n.PublicEndpoint, n.BasePort,
-		n.InterfaceName, n.ServerPublicKey, n.ProfileID, n.IsDefault, n.AcceptNewPeers,
+		n.InterfaceName, n.ServerPublicKey, n.ProfileID, n.IsDefault,
 	)
 	if err := row.Scan(
 		&out.ID, &out.ProfileID, &out.IsDefault, &out.AcceptNewPeers, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
