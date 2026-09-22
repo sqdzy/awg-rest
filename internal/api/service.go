@@ -124,8 +124,12 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		}
 	}
 	if !node.AcceptNewPeers {
+		field := "node_id"
+		if req.NodeHostname != nil {
+			field = "node_hostname"
+		}
 		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
-			Field: "node_id", Code: "provisioning_disabled",
+			Field: field, Code: "provisioning_disabled",
 			Message: "selected node is not accepting new peers",
 		}}
 	}
