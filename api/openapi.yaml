@@ -3,8 +3,8 @@ info:
   title: awg-rest control plane API
   version: 1.0.0
   description: |
-    REST API for the AmneziaWG V2 control plane (`awg-rest`): durable desired
-    state in Postgres, idempotent writes via `Idempotency-Key`, and
+    REST API for the versioned AmneziaWG V1/V2/V3.1 control plane (`awg-rest`):
+    durable desired state in Postgres, idempotent writes via `Idempotency-Key`, and
     asynchronous apply via the outbox/reconciler. Errors are returned as
     `application/problem+json` (RFC 9457).
 
@@ -206,9 +206,9 @@ components:
       properties:
         external_id:  { type: string, description: client-supplied stable ID }
         display_name: { type: string }
-        node_id:      { type: string, format: uuid }
-        profile_id:   { type: string, format: uuid }
-        profile_name: { type: string }
+        node_id:      { type: string, format: uuid, description: target node/interface; its profile is authoritative }
+        profile_id:   { type: string, format: uuid, description: optional compatibility assertion; when present it must match the node profile }
+        profile_name: { type: string, description: optional compatibility assertion; when present it must match the node profile }
         public_key:   { type: string, description: optional client-supplied public key (44-char base64) }
         expires_at:   { type: string, format: date-time }
 
