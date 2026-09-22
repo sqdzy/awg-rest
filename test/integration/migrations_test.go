@@ -4,12 +4,71 @@ package integration
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/awg-rest/awg-rest/internal/domain"
 	"github.com/awg-rest/awg-rest/internal/repo"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMigrate_UpgradesLegacyV2SchemaAndPreservesPeer(t *testing.T) {
+	ctx := context.Background()
+	db := startPostgresRaw(ctx, t)
+
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	legacyPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations", "0001_init.up.sql")
+	legacySQL, err := os.ReadFile(legacyPath)
+	require.NoError(t, err)
+	_, err = db.Pool.Exec(ctx, string(legacySQL))
+	require.NoError(t, err)
+
+	var tenantID, nodeID, profileID, peerID string
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`INSERT INTO tenants(slug) VALUES ('legacy') RETURNING id::text`).Scan(&tenantID))
+	require.NoError(t, db.Pool.QueryRow(ctx, `
+INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key)
+VALUES ('eu','legacy-vpn.test','legacy-vpn.test:585',585,'awg0','legacy-server-key')
+RETURNING id::text`).Scan(&nodeID))
+	require.NoError(t, db.Pool.QueryRow(ctx, `
+INSERT INTO protocol_profiles(
+    name, protocol_version, jc, jmin, jmax, s1, s2, s3, s4,
+    h1_min, h1_max, h2_min, h2_max, h3_min, h3_max, h4_min, h4_max
+) VALUES (
+    'legacy-v2','v2',5,10,50,40,32,12,12,
+    1000,1100,2000,2100,3000,3100,4000,4100
+) RETURNING id::text`).Scan(&profileID))
+	require.NoError(t, db.Pool.QueryRow(ctx, `
+INSERT INTO peers(
+    tenant_id, node_id, profile_id, external_id, public_key, preshared_key_ref, allowed_ip
+) VALUES ($1::uuid,$2::uuid,$3::uuid,'legacy-peer','legacy-public','legacy-psk','10.200.0.2')
+RETURNING id::text`, tenantID, nodeID, profileID).Scan(&peerID))
+
+	require.NoError(t, repo.Migrate(ctx, db.Pool))
+
+	var migratedProfileID string
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT profile_id::text FROM vpn_nodes WHERE id=$1::uuid`, nodeID).Scan(&migratedProfileID))
+	require.Equal(t, profileID, migratedProfileID)
+
+	var gotPeerID, gotPeerProfile string
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT id::text, profile_id::text FROM peers WHERE id=$1::uuid`, peerID).
+		Scan(&gotPeerID, &gotPeerProfile))
+	require.Equal(t, peerID, gotPeerID)
+	require.Equal(t, profileID, gotPeerProfile)
+
+	var version string
+	var headerKey *string
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT protocol_version, header_protection_key FROM protocol_profiles WHERE id=$1::uuid`,
+		profileID).Scan(&version, &headerKey))
+	require.Equal(t, "v2", version)
+	require.Nil(t, headerKey)
+}
 
 func TestMigrate_IsIdempotentAcrossRestarts(t *testing.T) {
 	ctx := context.Background()
