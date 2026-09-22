@@ -123,6 +123,12 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			return CreatePeerResponse{}, 0, err
 		}
 	}
+	if !node.AcceptNewPeers {
+		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
+			Field: "node_id", Code: "provisioning_disabled",
+			Message: "selected node is not accepting new peers",
+		}}
+	}
 	if node.ProfileID == nil {
 		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
 			Field: "node_id", Code: "profile_unassigned",
