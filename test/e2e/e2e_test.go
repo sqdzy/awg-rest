@@ -431,6 +431,13 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.Contains(t, created31.ClientConfig, "RandomTrailers = on")
 	require.Contains(t, created31.ClientConfig, "DisableCookies = on")
 
+	cfgResp := getJSON(t, client,
+		env.Server.URL+"/v1/tenants/acme/peers/"+created31.PeerID+"/configuration", bearer)
+	require.Equal(t, http.StatusOK, cfgResp.StatusCode)
+	cfgBody := readBody(t, cfgResp)
+	require.NotContains(t, cfgBody, "HeaderProtectionKey",
+		"non-secret configuration endpoint must not return V3.1 header key")
+
 	ran, err = env.Worker.RunOnce(ctx)
 	require.NoError(t, err)
 	require.True(t, ran)
