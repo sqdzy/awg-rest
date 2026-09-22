@@ -41,7 +41,7 @@ FROM vpn_nodes WHERE id = $1`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q, id)
 	if err := row.Scan(
-		&out.ID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
+		&out.ID, &out.ProfileID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
 		&out.InterfaceName, &out.ServerPublicKey, &out.Status, &out.AgentLastSeenAt, &out.CreatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -69,7 +69,7 @@ FROM vpn_nodes ORDER BY hostname LIMIT 1`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q)
 	if err := row.Scan(
-		&out.ID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
+		&out.ID, &out.ProfileID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
 		&out.InterfaceName, &out.ServerPublicKey, &out.Status, &out.AgentLastSeenAt, &out.CreatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
