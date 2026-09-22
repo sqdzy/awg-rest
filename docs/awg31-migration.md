@@ -35,6 +35,11 @@ fixed before mixed V2/V3.1 operation.
 - **FR-7** V3.1 ranges MUST be validated using unsigned protocol bounds.
 - **FR-8** V3.1 profiles with `RandomTrailers=on` MUST reject ranged H1-H3
   until upstream packet-classification behavior is proven safe by real E2E.
+  This protects against the still-open upstream `amneziawg-go` issue #186.
+- **FR-8a** I1-I5 obfuscation specs MUST reject malformed, negative, and
+  unreasonably large fixed-size tags before persistence. The pinned 3.1 runtime
+  accepts signed `Atoi` values for `r`/`rc`/`rd`/`dz`; negative values are part
+  of the upstream crash class tracked in `amneziawg-go` issue #189.
 - **FR-9** Existing V2 render output MUST remain compatible with current clients.
 - **FR-10** A V3.1 rollout MUST be possible on a separate node/interface without
   mutating existing V2 peers.
@@ -94,6 +99,8 @@ A later API cleanup MAY deprecate per-peer profile selection.
 - **AC-5 / FR-5..7:** a valid V3.1 profile round-trips through validation,
   repository persistence, and rendering.
 - **AC-6 / FR-8:** V3.1 validation rejects RandomTrailers with ranged H1-H3.
+- **AC-6a / FR-8a:** domain tests reject negative/oversized/malformed I1-I5
+  tags before they can reach `amneziawg-go`.
 - **AC-7 / FR-9:** V2 golden renderer fixtures remain unchanged.
 - **AC-8 / FR-10:** tests can represent separate V2 and V3.1 nodes without
   cross-profile reconciliation.
@@ -117,6 +124,7 @@ A later API cleanup MAY deprecate per-peer profile selection.
 
 - automatic end-user credential migration;
 - deleting V2 support;
-- enabling ranged H1-H3 with RandomTrailers;
+- enabling ranged H1-H3 with RandomTrailers before upstream #186 is resolved
+  and real-network verification passes;
 - silently rewriting existing client configs;
 - merging the V2 and V3.1 interfaces onto one protocol profile.
