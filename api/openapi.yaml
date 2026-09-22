@@ -223,7 +223,7 @@ components:
         allowed_ip:    { type: string }
         public_key:    { type: string }
         private_key:   { type: string, description: present only on first response when the server generated the key }
-        client_config: { type: string, description: complete client configuration present only on first response when the server generated the key }
+        client_config: { type: string, description: one-time secret-bearing client configuration; if public_key was supplied by the caller, PrivateKey is omitted and must be merged locally }
         preshared_key: { type: string, description: present only on the first create response; also embedded in client_config when client_config is present }
         node_id:       { type: string, format: uuid }
         profile_id:    { type: string, format: uuid }
