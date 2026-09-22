@@ -107,7 +107,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END
 $$;
 
-DO $
+DO $$
 BEGIN
     ALTER TABLE protocol_profiles
         ADD CONSTRAINT protocol_profiles_max_handshake_attempts_order_check
@@ -117,9 +117,9 @@ BEGIN
         );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END
-$;
+$$;
 
-DO $
+DO $$
 BEGIN
     ALTER TABLE protocol_profiles
         ADD CONSTRAINT protocol_profiles_persistent_keepalive_order_check
@@ -129,7 +129,7 @@ BEGIN
         );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END
-$;
+$$;
 
 DO $$
 BEGIN
