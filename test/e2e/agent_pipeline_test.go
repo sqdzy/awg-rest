@@ -67,7 +67,7 @@ func TestE2E_RemoteAgentPipeline(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, peers, 1)
 	require.Equal(t, cr.PublicKey, peers[0].PublicKey)
-	require.Equal(t, cr.PresharedKey, peers[0].PresharedKey)
+	require.Empty(t, peers[0].PresharedKey, "remote runtime diagnostics must not return preshared keys")
 	require.Zero(t, peers[0].KeepaliveSecs)
 }
 
