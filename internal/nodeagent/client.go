@@ -158,7 +158,10 @@ func (r *RemoteExecutor) ShowDump(ctx context.Context, iface string) (awg.Interf
 			PublicKey: p.PublicKey, PresharedKey: p.PresharedKey,
 			Endpoint: p.Endpoint, AllowedIPs: p.AllowedIPs,
 			LastHandshake: p.LastHandshake,
-			RxBytes:       p.RxBytes, TxBytes: p.TxBytes, KeepaliveSecs: p.KeepaliveSecs,
+			RxBytes:        p.RxBytes,
+			TxBytes:        p.TxBytes,
+			KeepaliveSecs:  p.KeepaliveSecs,
+			KeepaliveRange: p.KeepaliveRange,
 		})
 	}
 	return awg.InterfaceRuntime{
