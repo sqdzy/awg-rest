@@ -209,7 +209,9 @@ func dumpHandler(e awg.Executor) http.HandlerFunc {
 		for _, p := range peers {
 			out.Peers = append(out.Peers, PeerRuntime{
 				PublicKey:     p.PublicKey,
-				PresharedKey:  p.PresharedKey,
+				// Preshared keys are runtime secrets and are deliberately
+				// omitted from the diagnostic/control-plane dump response.
+				PresharedKey:  "",
 				Endpoint:      p.Endpoint,
 				AllowedIPs:    p.AllowedIPs,
 				LastHandshake: p.LastHandshake,
@@ -256,7 +258,7 @@ func isSecretConfigLine(line string) bool {
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(key)) {
-	case "privatekey", "presharedkey":
+	case "privatekey", "presharedkey", "headerprotectionkey":
 		return true
 	default:
 		return false
