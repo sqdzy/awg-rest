@@ -88,6 +88,58 @@ profiles.
 
 Back up both Docker volumes. `awg-state` contains the server private key.
 
+### Parallel AmneziaWG 3.1 rollout
+
+Existing installations stay on the bootstrap V2 node until an operator explicitly
+creates a separate V3.1 node. The supported rollout path does not rewrite V2
+profiles or peers.
+
+Expose a second UDP port:
+
+```bash
+docker compose -f compose.yaml -f compose.v31.yaml up -d
+```
+
+Then create the V3.1 profile, node, address pool, server key and bootstrap
+configuration inside the running all-in-one container:
+
+```bash
+docker compose exec -T awg-rest /awg-api -provision-v31-node
+```
+
+The command is create-only and fails rather than overwriting an existing
+profile, hostname, interface, UDP port, bootstrap config, or overlapping CIDR.
+Defaults are:
+
+- profile `default-v31`
+- node `awg-node-31`
+- interface `awg31`
+- UDP `38824`
+- pool `10.201.0.0/24`
+- the same public endpoint, region, NAT setting and egress interface as the
+  initial bootstrap node
+
+It prints non-secret JSON including the new `node_id`. Pass that `node_id`
+when creating V3.1 peers; omitting `node_id` continues to use the normal
+deterministic node selection and should not be relied on for migration.
+
+The generated V3.1 preset follows the parameters currently assigned by the
+Amnezia client installer: `S1-S4=12`, fixed `H1-H4=1/2/3/4`, a fresh
+HeaderProtectionKey, timings `100-120 / 3-7 / 150-180 / 5-15 / 15-20`,
+`PersistentKeepalive=25-35`, `RandomTrailers=on`, `DisableCookies=on`,
+and the current default I1 packet. `ContentPaddingAddition` is deliberately
+left unset: the current client defines `10-100` as a constant but does not
+assign it in `generateAwgParameters()`.
+
+For non-default ports or networks, inspect the CLI options with
+`/awg-api -h`. If the external port is translated by NAT, set
+`-v31-node-endpoint` to a `host:external-port` value while
+`-v31-node-port` remains the local AWG listen port.
+
+Stopping publication of the second UDP port immediately removes the V3.1 path
+from external reachability without affecting the original V2 interface. Do not
+delete or rewrite V2 profiles during a canary migration.
+
 ## Connect Your Backend
 
 Attach your backend container to the same Docker network:
@@ -234,7 +286,8 @@ Important `.env` values:
 | `JWT_SECRET` | HMAC signing secret shared only with your backend |
 | `AWG_API_BIND` | host binding for REST API, keep loopback-only |
 | `AWG_UDP_BIND` | host UDP binding for VPN traffic |
-| `AWG_UDP_PORT` | UDP listen port inside client configs |
+| `AWG_UDP_PORT` | UDP listen port inside V2 bootstrap client configs |
+| `AWG31_UDP_BIND` / `AWG31_UDP_PORT` | optional second published/listen port used by `compose.v31.yaml` |
 | `BOOTSTRAP_POOL_CIDR` | VPN client address pool |
 | `AWG_INTERNAL_NETWORK` | Docker network for backend-to-API traffic |
 
