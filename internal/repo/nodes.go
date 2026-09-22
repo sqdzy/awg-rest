@@ -73,12 +73,16 @@ func (r *Nodes) MarkSeen(ctx context.Context, id uuid.UUID, status string) error
 	return err
 }
 
-// PickFirst returns the first node (deterministic by hostname). The control
-// plane uses this when the API caller does not pin a node.
+// PickFirst returns the implicit/default node used when callers omit node_id.
+// During staged migration, legacy V1/V2 nodes remain ahead of V3.1 nodes so
+// adding a parallel V3.1 canary cannot silently move old API clients.
 func (r *Nodes) PickFirst(ctx context.Context) (*domain.Node, error) {
 	const q = `
-SELECT id, profile_id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at
-FROM vpn_nodes ORDER BY hostname LIMIT 1`
+SELECT n.id, n.profile_id, n.region, n.hostname, n.public_endpoint, n.base_port, n.interface_name, n.server_public_key, n.status, n.agent_last_seen_at, n.created_at
+FROM vpn_nodes n
+LEFT JOIN protocol_profiles p ON p.id = n.profile_id
+ORDER BY CASE WHEN p.protocol_version = 'v3.1' THEN 1 ELSE 0 END, n.hostname
+LIMIT 1`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q)
 	if err := row.Scan(
