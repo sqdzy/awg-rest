@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -207,6 +208,13 @@ func (p ProtocolProfile) Validate() error {
 					Field: ij.name, Code: "too_long",
 					Message: fmt.Sprintf("must be at most %d bytes, got %d", AWGStringMax, len(ij.v)),
 				})
+			} else if ij.v != "" {
+				if err := validateSpecialJunk(ij.v); err != nil {
+					errs = append(errs, ValidationError{
+						Field: ij.name, Code: "invalid_obfuscation",
+						Message: err.Error(),
+					})
+				}
 			}
 		}
 	} else {
@@ -312,6 +320,79 @@ func (p ProtocolProfile) Validate() error {
 		return nil
 	}
 	return errs
+}
+
+func validateSpecialJunk(spec string) error {
+	remaining := spec
+	totalFixed := 0
+	tagCount := 0
+
+	for {
+		start := strings.IndexByte(remaining, '<')
+		if start == -1 {
+			break
+		}
+		endRel := strings.IndexByte(remaining[start:], '>')
+		if endRel == -1 {
+			return fmt.Errorf("special-junk tag is missing closing '>'")
+		}
+		end := start + endRel
+		fields := strings.Fields(remaining[start+1 : end])
+		if len(fields) == 0 {
+			return fmt.Errorf("special-junk tag must not be empty")
+		}
+		tagCount++
+
+		switch fields[0] {
+		case "b":
+			if len(fields) != 2 {
+				return fmt.Errorf("<b> requires exactly one hex argument")
+			}
+			raw := strings.TrimPrefix(fields[1], "0x")
+			if raw == "" || len(raw)%2 != 0 {
+				return fmt.Errorf("<b> requires a non-empty even-length hex argument")
+			}
+			decoded, err := hex.DecodeString(raw)
+			if err != nil {
+				return fmt.Errorf("<b> contains invalid hex")
+			}
+			totalFixed += len(decoded)
+		case "t":
+			if len(fields) != 1 {
+				return fmt.Errorf("<t> does not accept arguments")
+			}
+			totalFixed += 4
+		case "r", "rc", "rd", "dz":
+			if len(fields) != 2 {
+				return fmt.Errorf("<%s> requires exactly one size argument", fields[0])
+			}
+			n, err := strconv.Atoi(fields[1])
+			if err != nil || n < 0 {
+				return fmt.Errorf("<%s> size must be a non-negative integer", fields[0])
+			}
+			if n > JunkSizeMax {
+				return fmt.Errorf("<%s> size must be <= %d", fields[0], JunkSizeMax)
+			}
+			totalFixed += n
+		case "d", "ds":
+			if len(fields) != 1 {
+				return fmt.Errorf("<%s> does not accept arguments", fields[0])
+			}
+			// Dynamic-data tags depend on the source packet and therefore do
+			// not contribute a statically knowable length here.
+		default:
+			return fmt.Errorf("unknown special-junk tag <%s>", fields[0])
+		}
+		if totalFixed > JunkSizeMax {
+			return fmt.Errorf("special-junk fixed output must be <= %d bytes", JunkSizeMax)
+		}
+		remaining = remaining[end+1:]
+	}
+
+	if tagCount == 0 {
+		return fmt.Errorf("special-junk value must contain at least one supported tag")
+	}
+	return nil
 }
 
 func validBase64Key(s string) bool {
