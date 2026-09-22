@@ -16,16 +16,16 @@ type Nodes struct{ DB *DB }
 // Insert creates a new VPN node entry.
 func (r *Nodes) Insert(ctx context.Context, n domain.Node) (*domain.Node, error) {
 	const q = `
-INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key)
-VALUES ($1,$2,$3,$4,$5,$6)
-RETURNING id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at`
+INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key, profile_id)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+RETURNING id, profile_id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q,
 		n.Region, n.Hostname, n.PublicEndpoint, n.BasePort,
-		n.InterfaceName, n.ServerPublicKey,
+		n.InterfaceName, n.ServerPublicKey, n.ProfileID,
 	)
 	if err := row.Scan(
-		&out.ID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
+		&out.ID, &out.ProfileID, &out.Region, &out.Hostname, &out.PublicEndpoint, &out.BasePort,
 		&out.InterfaceName, &out.ServerPublicKey, &out.Status, &out.AgentLastSeenAt, &out.CreatedAt,
 	); err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ RETURNING id, region, hostname, public_endpoint, base_port, interface_name, serv
 // GetByID fetches a node by id.
 func (r *Nodes) GetByID(ctx context.Context, id uuid.UUID) (*domain.Node, error) {
 	const q = `
-SELECT id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at
+SELECT id, profile_id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at
 FROM vpn_nodes WHERE id = $1`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q, id)
@@ -64,7 +64,7 @@ func (r *Nodes) MarkSeen(ctx context.Context, id uuid.UUID, status string) error
 // plane uses this when the API caller does not pin a node.
 func (r *Nodes) PickFirst(ctx context.Context) (*domain.Node, error) {
 	const q = `
-SELECT id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at
+SELECT id, profile_id, region, hostname, public_endpoint, base_port, interface_name, server_public_key, status, agent_last_seen_at, created_at
 FROM vpn_nodes ORDER BY hostname LIMIT 1`
 	var out domain.Node
 	row := r.DB.Pool.QueryRow(ctx, q)
