@@ -66,6 +66,7 @@ func TestRealAWG_ProtocolCompatibility(t *testing.T) {
 			RejectAfterTime:        domain.Uint16Range{Min: 10, Max: 10},
 			KeepaliveTimeout:       domain.Uint16Range{Min: 1, Max: 1},
 			MaxHandshakeAttempts:   domain.Uint16Range{Min: 5, Max: 5},
+			PersistentKeepalive:     domain.Uint16Range{Min: 1, Max: 1},
 			RandomTrailers:         true,
 			DisableCookies:         true,
 		}
