@@ -223,8 +223,17 @@ curl -sS -X POST "http://127.0.0.1:18080/v1/tenants/default/peers" \
 `node_id` and `node_hostname` continues to place the peer on the explicit
 default V2 node.
 
-To disable new V3.1 provisioning, deploy only `compose.yaml`. Existing V3.1
-database state is not deleted automatically; this avoids destructive rollback.
+For a graceful rollback/drain, keep the V3.1 override and set:
+
+```dotenv
+BOOTSTRAP_V31_ACCEPT_NEW_PEERS=false
+```
+
+Then redeploy with both Compose files. Existing V3.1 peers/interface/listener
+remain, but the API rejects new placements on that node. After existing V3.1
+peers are migrated/revoked, removing `compose.awg31.yaml` closes the second
+host UDP publication; startup also leaves the persisted V3.1 node in
+`accept_new_peers=false` rather than deleting state or rotating keys.
 
 Poll the operation:
 
