@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -58,11 +59,13 @@ func TestRealAWG_ProtocolCompatibility(t *testing.T) {
 			I1: "<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>",
 			HeaderProtectionKey:    headerKey,
 			ContentPaddingAddition: domain.Uint16Range{Min: 10, Max: 100},
-			RekeyAfterTime:         domain.Uint16Range{Min: 100, Max: 120},
-			RekeyTimeout:           domain.Uint16Range{Min: 3, Max: 7},
-			RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
-			KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
-			MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
+			// Aggressive timings are test-only so rekey is observable within
+			// the CI timeout; production profiles can use wider defaults.
+			RekeyAfterTime:         domain.Uint16Range{Min: 1, Max: 1},
+			RekeyTimeout:           domain.Uint16Range{Min: 1, Max: 1},
+			RejectAfterTime:        domain.Uint16Range{Min: 10, Max: 10},
+			KeepaliveTimeout:       domain.Uint16Range{Min: 1, Max: 1},
+			MaxHandshakeAttempts:   domain.Uint16Range{Min: 5, Max: 5},
 			RandomTrailers:         true,
 			DisableCookies:         true,
 		}
@@ -76,7 +79,7 @@ func requireRootAndTools(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Fatalf("real AWG E2E requires root")
 	}
-	for _, name := range []string{"ip", "awg", "awg-quick", "amneziawg-go", "ping"} {
+	for _, name := range []string{"ip", "awg", "awg-quick", "amneziawg-go", "ping", "python3"} {
 		if _, err := exec.LookPath(name); err != nil {
 			t.Fatalf("real AWG E2E requires %s in PATH: %v", name, err)
 		}
@@ -156,13 +159,12 @@ func runRealTunnelCase(t *testing.T, profile domain.ProtocolProfile, serverPort 
 	// A 1200-byte ICMP payload exercises a near-MTU encrypted transport packet
 	// in addition to forcing a real handshake.
 	runNetNS(t, clientNS, "ping", "-c", "3", "-W", "2", "-s", "1200", serverTunnel.String())
+	initialHandshake := latestHandshake(t, serverNS, serverIface)
+	require.Greater(t, initialHandshake, int64(0), "real AWG handshake timestamp must be non-zero")
 
-	out := runNetNSOutput(t, serverNS, "awg", "show", serverIface, "latest-handshakes")
-	fields := strings.Fields(out)
-	require.GreaterOrEqual(t, len(fields), 2, "unexpected latest-handshakes output: %q", out)
-	ts, err := strconv.ParseInt(fields[len(fields)-1], 10, 64)
-	require.NoError(t, err)
-	require.Greater(t, ts, int64(0), "real AWG handshake timestamp must be non-zero")
+	// Exercise application traffic in both common transport modes, not only ICMP.
+	runPythonEcho(t, dir, serverNS, clientNS, "tcp", serverTunnel.String(), 52101)
+	runPythonEcho(t, dir, serverNS, clientNS, "udp", serverTunnel.String(), 52102)
 
 	if profile.IsV31() {
 		show := runNetNSOutputSensitive(t, serverNS, "awg", "showconf", serverIface)
@@ -170,6 +172,20 @@ func runRealTunnelCase(t *testing.T, profile domain.ProtocolProfile, serverPort 
 		require.Contains(t, show, "RandomTrailers = on", "V3.1 runtime must retain RandomTrailers=on")
 		require.Contains(t, show, "DisableCookies = on", "V3.1 runtime must retain DisableCookies=on")
 		require.Contains(t, show, "ContentPaddingAddition = 10-100")
+
+		// RekeyAfterTime is 1 second in this test profile. Keep sending real
+		// traffic until the server observes a newer handshake.
+		rekeyed := waitForNewHandshake(t, clientNS, serverNS, clientIface, serverIface, serverTunnel.String(), initialHandshake)
+		require.Greater(t, rekeyed, initialHandshake, "V3.1 tunnel must rekey")
+
+		// Destroy and recreate the client userspace TUN process. Successful
+		// traffic afterwards necessarily requires a fresh handshake.
+		runNetNS(t, clientNS, "ip", "link", "del", clientIface)
+		waitForLinkGone(t, clientNS, clientIface)
+		startUserspaceInterface(t, clientNS, clientIface, clientTunnel.String()+"/30", clientSetconf)
+		runNetNS(t, clientNS, "ping", "-c", "2", "-W", "2", serverTunnel.String())
+		require.Greater(t, latestHandshake(t, clientNS, clientIface), int64(0),
+			"recreated client must complete a fresh handshake")
 	}
 }
 
@@ -248,6 +264,129 @@ func writeSecretConfig(t *testing.T, dir, name, content string) string {
 	path := filepath.Join(dir, name)
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
+}
+
+func latestHandshake(t *testing.T, ns, iface string) int64 {
+	t.Helper()
+	out := runNetNSOutput(t, ns, "awg", "show", iface, "latest-handshakes")
+	fields := strings.Fields(out)
+	require.GreaterOrEqual(t, len(fields), 2, "unexpected latest-handshakes output: %q", out)
+	ts, err := strconv.ParseInt(fields[len(fields)-1], 10, 64)
+	require.NoError(t, err)
+	return ts
+}
+
+func waitForNewHandshake(t *testing.T, clientNS, serverNS, clientIface, serverIface, target string, previous int64) int64 {
+	t.Helper()
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		runNetNS(t, clientNS, "ping", "-c", "1", "-W", "1", target)
+		if ts := latestHandshake(t, serverNS, serverIface); ts > previous {
+			return ts
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	t.Fatalf("handshake did not advance after rekey window (client iface %s)", clientIface)
+	return 0
+}
+
+func waitForLinkGone(t *testing.T, ns, iface string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		cmd := exec.Command("ip", "netns", "exec", ns, "ip", "link", "show", "dev", iface)
+		if err := cmd.Run(); err != nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("userspace AWG interface %s did not disappear in namespace %s", iface, ns)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func runPythonEcho(t *testing.T, dir, serverNS, clientNS, network, host string, port int) {
+	t.Helper()
+	ready := filepath.Join(dir, fmt.Sprintf("%s-%d.ready", network, port))
+	_ = os.Remove(ready)
+
+	var serverScript, clientScript string
+	switch network {
+	case "tcp":
+		serverScript = `import socket,sys
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+s.bind((sys.argv[1],int(sys.argv[2])))
+s.listen(1)
+open(sys.argv[3],"w").close()
+c,_=s.accept()
+d=c.recv(4096)
+c.sendall(d)
+c.close()
+s.close()
+`
+		clientScript = `import socket,sys
+p=b"awg-rest-tcp"
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+s.settimeout(3)
+s.connect((sys.argv[1],int(sys.argv[2])))
+s.sendall(p)
+d=s.recv(4096)
+s.close()
+raise SystemExit(0 if d==p else 2)
+`
+	case "udp":
+		serverScript = `import socket,sys
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+s.bind((sys.argv[1],int(sys.argv[2])))
+open(sys.argv[3],"w").close()
+d,a=s.recvfrom(4096)
+s.sendto(d,a)
+s.close()
+`
+		clientScript = `import socket,sys
+p=b"awg-rest-udp"
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+s.settimeout(3)
+s.sendto(p,(sys.argv[1],int(sys.argv[2])))
+d,_=s.recvfrom(4096)
+s.close()
+raise SystemExit(0 if d==p else 2)
+`
+	default:
+		t.Fatalf("unsupported echo network %q", network)
+	}
+
+	serverArgs := []string{"netns", "exec", serverNS, "python3", "-c", serverScript, host, strconv.Itoa(port), ready}
+	server := exec.Command("ip", serverArgs...)
+	if err := server.Start(); err != nil {
+		t.Fatalf("start %s echo server: %v", network, err)
+	}
+	t.Cleanup(func() {
+		if server.Process != nil {
+			_ = server.Process.Kill()
+		}
+		_ = server.Wait()
+	})
+	waitForFile(t, ready)
+
+	runNetNS(t, clientNS, "python3", "-c", clientScript, host, strconv.Itoa(port))
+	require.NoError(t, server.Wait(), "%s echo server failed", network)
+	server.Process = nil
+}
+
+func waitForFile(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for readiness file %s", filepath.Base(path))
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 func mustPrefix(t *testing.T, s string) netip.Prefix {
