@@ -78,7 +78,7 @@ func ProvisionV31Node(ctx context.Context, db *repo.DB, opts V31NodeOptions, log
 		return nil, fmt.Errorf("tenant %q: %w", opts.TenantSlug, err)
 	}
 
-	headerKP, err := crypto.GenerateKeyPair()
+	headerProtectionKey, err := crypto.GeneratePresharedKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate header-protection key: %w", err)
 	}
@@ -87,7 +87,7 @@ func ProvisionV31Node(ctx context.Context, db *repo.DB, opts V31NodeOptions, log
 		return nil, fmt.Errorf("generate server keypair: %w", err)
 	}
 
-	profile := defaultV31Profile(strings.TrimSpace(opts.ProfileName), headerKP.PrivateKey)
+	profile := defaultV31Profile(strings.TrimSpace(opts.ProfileName), headerProtectionKey)
 	if err := profile.Validate(); err != nil {
 		return nil, fmt.Errorf("generated v3.1 profile invalid: %w", err)
 	}
