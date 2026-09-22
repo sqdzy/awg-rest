@@ -1,7 +1,8 @@
 # awg-rest
 
-Internal REST API for provisioning AmneziaWG V2 VPN peers from another backend
-container.
+Internal REST API for provisioning versioned AmneziaWG VPN peers from another
+backend container. The control plane supports legacy V1/V2 profiles and staged
+AmneziaWG 3.1 rollout.
 
 `awg-rest` is designed for a single private control-plane path:
 
@@ -11,7 +12,9 @@ your backend container -> awg-rest REST API -> embedded Postgres -> embedded wor
 
 The default distribution is an all-in-one Docker image. It contains the API,
 embedded worker, PostgreSQL, `amneziawg-tools`, and `amneziawg-go` userspace
-fallback, so the host does not need an AmneziaWG kernel module.
+fallback. The bundled runtime is pinned to a 3.1-capable release while the
+bootstrap profile deliberately remains V2 until the V3.1 real-network release
+gate is completed.
 
 Do not expose the REST API to the public internet. Publish only the VPN UDP
 port.
@@ -149,10 +152,15 @@ curl -sS -X POST "http://127.0.0.1:18080/v1/tenants/default/peers" \
   -H "Idempotency-Key: user-123-create-v1" \
   -d '{
     "external_id": "user-123",
-    "display_name": "User 123",
-    "profile_name": "default-v2"
+    "display_name": "User 123"
   }'
 ```
+
+The selected node/interface owns the protocol profile. New peers inherit that
+profile automatically. `profile_id` and `profile_name` may still be sent by
+older callers, but now act only as assertions and are rejected if they do not
+match the node profile. This prevents one peer from changing interface-wide AWG
+parameters for every other peer on the same node.
 
 The first create response includes one-time secret material:
 
@@ -208,6 +216,11 @@ curl -sS -X POST "http://127.0.0.1:18080/v1/tenants/default/peers/$PEER_ID:revok
 ```
 
 OpenAPI contract: [`api/openapi.yaml`](api/openapi.yaml).
+
+The staged V2 -> V3.1 rollout, compatibility gates, and rollback model are
+documented in [`docs/awg31-migration.md`](docs/awg31-migration.md). Existing
+V2 profiles are not upgraded in place; V3.1 is intended to run on a separate
+node/interface during migration.
 
 ## Configuration
 
