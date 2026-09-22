@@ -35,7 +35,8 @@ type PeerRuntime struct {
 	LastHandshake time.Time
 	RxBytes       int64
 	TxBytes       int64
-	KeepaliveSecs int
+	KeepaliveSecs  int
+	KeepaliveRange string // raw AWG range (e.g. "25-35"); empty for off
 }
 
 // InterfaceRuntime is the interface-level row of `awg show <iface> dump`.
