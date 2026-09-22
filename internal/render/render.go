@@ -185,7 +185,9 @@ func writeProfile(b *strings.Builder, p domain.ProtocolProfile, includeEmptySpec
 		writeSpecialJunk(b, "I5", p.I5, includeEmptySpecialJunk)
 	}
 	if p.IsV31() {
-		fmt.Fprintf(b, "HeaderProtectionKey = %s\n", p.HeaderProtectionKey)
+		if p.HeaderProtectionKey != "" {
+			fmt.Fprintf(b, "HeaderProtectionKey = %s\n", p.HeaderProtectionKey)
+		}
 		writeUint16Range(b, "ContentPaddingAddition", p.ContentPaddingAddition)
 		writeUint16Range(b, "RekeyAfterTime", p.RekeyAfterTime)
 		writeUint16Range(b, "RekeyTimeout", p.RekeyTimeout)
