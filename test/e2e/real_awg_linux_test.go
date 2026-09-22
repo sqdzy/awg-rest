@@ -3,14 +3,13 @@
 package e2e
 
 import (
+	"net/netip"
 	"os"
 	"os/exec"
-	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/awg-rest/awg-rest/internal/crypto"
 	"github.com/awg-rest/awg-rest/internal/domain"
@@ -153,8 +152,11 @@ func runRealTunnelCase(t *testing.T, profile domain.ProtocolProfile, serverPort 
 
 	runNetNSEnv(t, serverNS, []string{"WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go"},
 		"awg-quick", "up", serverPath)
+	t.Cleanup(func() { bestEffortWGQuickDown(t, serverNS, serverPath) })
+
 	runNetNSEnv(t, clientNS, []string{"WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go"},
 		"awg-quick", "up", clientPath)
+	t.Cleanup(func() { bestEffortWGQuickDown(t, clientNS, clientPath) })
 
 	// A 1200-byte ICMP payload exercises a near-MTU encrypted transport packet
 	// in addition to forcing a real handshake.
@@ -170,10 +172,16 @@ func runRealTunnelCase(t *testing.T, profile domain.ProtocolProfile, serverPort 
 	// Ensure V3.1 controls survived awg-quick -> awg application rather than
 	// merely being accepted by our text renderer.
 	if profile.IsV31() {
-		show := runNetNSOutput(t, serverNS, "awg", "showconf", serverIface)
-		require.Contains(t, show, "HeaderProtectionKey")
-		require.Contains(t, show, "RandomTrailers")
-		require.Contains(t, show, "DisableCookies")
+		show := runNetNSOutputSensitive(t, serverNS, "awg", "showconf", serverIface)
+		if !strings.Contains(show, "HeaderProtectionKey = ") {
+			t.Fatal("V3.1 runtime did not retain HeaderProtectionKey")
+		}
+		if !strings.Contains(show, "RandomTrailers = on") {
+			t.Fatal("V3.1 runtime did not retain RandomTrailers=on")
+		}
+		if !strings.Contains(show, "DisableCookies = on") {
+			t.Fatal("V3.1 runtime did not retain DisableCookies=on")
+		}
 	}
 }
 
@@ -216,3 +224,24 @@ func runNetNSEnv(t *testing.T, ns string, env []string, name string, args ...str
 	require.NoError(t, err, "ip %v failed: %s", all, out)
 }
 
+
+func runNetNSOutputSensitive(t *testing.T, ns, name string, args ...string) string {
+	t.Helper()
+	all := append([]string{"netns", "exec", ns, name}, args...)
+	cmd := exec.Command("ip", all...)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "ip %v failed (sensitive output suppressed)", all)
+	return string(out)
+}
+
+func bestEffortWGQuickDown(t *testing.T, ns, configPath string) {
+	t.Helper()
+	cmd := exec.Command(
+		"ip", "netns", "exec", ns, "env",
+		"WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go",
+		"awg-quick", "down", configPath,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Logf("best-effort awg-quick down failed in namespace %s: %v (%s)", ns, err, strings.TrimSpace(string(out)))
+	}
+}
