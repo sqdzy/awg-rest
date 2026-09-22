@@ -38,7 +38,7 @@ WHERE profile_id IS NULL
 
 -- If profiles remain ambiguous for any node, stop the upgrade instead of
 -- leaving the API unable to provision new peers onto that node.
-DO $
+DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM vpn_nodes WHERE profile_id IS NULL)
        AND (SELECT COUNT(*) FROM protocol_profiles) > 1 THEN
@@ -46,6 +46,6 @@ BEGIN
             'cannot migrate vpn_nodes.profile_id: at least one node has no peers and multiple protocol profiles exist; assign a node profile explicitly before upgrading';
     END IF;
 END
-$;
+$$;
 
 CREATE INDEX IF NOT EXISTS vpn_nodes_profile_idx ON vpn_nodes (profile_id);
