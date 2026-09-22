@@ -461,6 +461,23 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 
 	require.Len(t, env.Executor.Snapshot("awg0"), 2, "V3.1 reconcile must not alter V2 interface")
 	require.Len(t, env.Executor.Snapshot("awg31"), 1)
+
+	require.NoError(t, env.Service.Nodes.SetAcceptNewPeers(ctx, v31Node.ID, false))
+	drainedResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-v31-drained", map[string]any{
+			"external_id":   "dual-v31-drained",
+			"node_hostname": v31Node.Hostname,
+		})
+	require.Equal(t, http.StatusUnprocessableEntity, drainedResp.StatusCode)
+	var drainedProblem map[string]any
+	require.NoError(t, json.NewDecoder(drainedResp.Body).Decode(&drainedProblem))
+	drainedResp.Body.Close()
+	require.Equal(t, "validation_failed", drainedProblem["code"])
+
+	var drainedCount int
+	require.NoError(t, env.DB.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM peers WHERE external_id = 'dual-v31-drained'`).Scan(&drainedCount))
+	require.Zero(t, drainedCount)
 }
 
 func TestE2E_Auth_Rejects(t *testing.T) {
