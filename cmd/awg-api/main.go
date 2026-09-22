@@ -56,11 +56,11 @@ func main() {
 
 		db, err := repo.NewDB(ctx, cfg.DatabaseURL)
 		if err != nil {
-			panic(err)
+			exitCLI("connect database", err)
 		}
 		defer db.Close()
 		if err := repo.Migrate(ctx, db.Pool); err != nil {
-			panic(err)
+			exitCLI("migrate database", err)
 		}
 
 		result, err := bootstrap.ProvisionV31Node(ctx, db, bootstrap.V31NodeOptions{
@@ -77,12 +77,12 @@ func main() {
 			EgressIface:      *v31Egress,
 		}, slog.Default())
 		if err != nil {
-			panic(err)
+			exitCLI("provision V3.1 node", err)
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(result); err != nil {
-			panic(err)
+			exitCLI("write provisioning result", err)
 		}
 		return
 	}
@@ -149,6 +149,12 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = built.Server.Shutdown(shutdownCtx)
+}
+
+
+func exitCLI(step string, err error) {
+	fmt.Fprintf(os.Stderr, "awg-api: %s: %v\n", step, err)
+	os.Exit(1)
 }
 
 func buildExecutor(cfg *config.Config, logger *slog.Logger) awg.Executor {
