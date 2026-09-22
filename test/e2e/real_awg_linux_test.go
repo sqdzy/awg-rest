@@ -3,10 +3,9 @@
 package e2e
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"os/exec"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -217,7 +216,3 @@ func runNetNSEnv(t *testing.T, ns string, env []string, name string, args ...str
 	require.NoError(t, err, "ip %v failed: %s", all, out)
 }
 
-// Keep context imported in this linux-only file as a guard against accidental
-// build-tag drift in helper refactors.
-var _ = context.Background
-var _ = fmt.Sprintf
