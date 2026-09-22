@@ -180,7 +180,7 @@ func validV31() ProtocolProfile {
 		H2: IntRange{Min: 2, Max: 2},
 		H3: IntRange{Min: 3, Max: 3},
 		H4: IntRange{Min: 4, Max: 4},
-		I1:              "<packet>",
+		I1:              "<r 2><b 0x00ff>",
 		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
 		ContentPaddingAddition: Uint16Range{Min: 10, Max: 100},
 		RekeyAfterTime:         Uint16Range{Min: 100, Max: 120},
@@ -286,6 +286,51 @@ func TestProtocolProfile_V31HeaderProtectionRequiresTwelveBytePaddings(t *testin
 				}
 			}
 			require.True(t, found, "expected header_protection_padding error for %s", field)
+		})
+	}
+}
+
+
+func TestProtocolProfile_SpecialJunkValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid supported tags", func(t *testing.T) {
+		p := validV2()
+		p.I1 = "<r 2><rc 4><rd 3><dz 2><b 0x00ff><t><d><ds>"
+		require.NoError(t, p.Validate())
+	})
+
+	for _, tc := range []struct {
+		name string
+		spec string
+	}{
+		{"negative random", "<r -1>"},
+		{"negative chars", "<rc -1>"},
+		{"negative digits", "<rd -1>"},
+		{"negative data size", "<dz -1>"},
+		{"huge allocation", "<r 999999999>"},
+		{"fixed total over cap", "<r 1000><rd 500>"},
+		{"unknown tag", "<wat 1>"},
+		{"invalid hex", "<b 0x0xz1>"},
+		{"missing close", "<r 2"},
+		{"plain text only", "not-an-obfuscation-spec"},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			p := validV2()
+			p.I1 = tc.spec
+			err := p.Validate()
+			require.Error(t, err)
+			ve, ok := err.(ValidationErrors)
+			require.True(t, ok)
+			var found bool
+			for _, item := range ve {
+				if item.Field == "i1" && item.Code == "invalid_obfuscation" {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "expected invalid_obfuscation for %q", tc.spec)
 		})
 	}
 }
