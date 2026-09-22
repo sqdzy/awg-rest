@@ -244,11 +244,18 @@ Important `.env` values:
   Docker network protects it.
 - Publish only the configured UDP VPN port to the internet.
 - Rotate `JWT_SECRET` if it was exposed.
-- Back up `awg-state`; losing it loses the server private key.
+- Treat both persistent volumes and their backups as secret-bearing. Postgres
+  stores peer preshared keys and V3.1 HeaderProtectionKey values needed for
+  reconciliation; `awg-state` stores the server private key.
+- Protect backup storage and access to Docker volumes accordingly. A future
+  encryption-at-rest hardening should cover all persisted VPN key material
+  together rather than encrypting only one key type.
 - Do not delete volumes unless you want to recreate the VPN node and reissue
   client configs.
 
 ## License
 
 Repository code is MIT licensed. The all-in-one image bundles
-`amneziawg-tools`, which is GPL-2.0-only upstream software.
+`amneziawg-tools` (GPL-2.0-only) and `amneziawg-go` (MIT). Their license
+texts are included under `/usr/share/licenses/`, and the Dockerfile pins the
+exact upstream tags and commit SHAs used to build the bundled binaries.
