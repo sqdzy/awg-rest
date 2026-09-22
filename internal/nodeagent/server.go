@@ -224,7 +224,8 @@ func dumpHandler(e awg.Executor) http.HandlerFunc {
 				LastHandshake: p.LastHandshake,
 				RxBytes:       p.RxBytes,
 				TxBytes:       p.TxBytes,
-				KeepaliveSecs: p.KeepaliveSecs,
+				KeepaliveSecs:  p.KeepaliveSecs,
+				KeepaliveRange: p.KeepaliveRange,
 			})
 		}
 		writeJSON(w, http.StatusOK, out)
