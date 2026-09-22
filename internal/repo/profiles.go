@@ -23,6 +23,7 @@ rekey_timeout_min, rekey_timeout_max,
 reject_after_time_min, reject_after_time_max,
 keepalive_timeout_min, keepalive_timeout_max,
 max_handshake_attempts_min, max_handshake_attempts_max,
+persistent_keepalive_min, persistent_keepalive_max,
 random_trailers, disable_cookies, created_at`
 
 // Insert persists a profile after server-side validation.
@@ -50,6 +51,7 @@ func insertProfile(ctx context.Context, qx profileRowQuerier, p domain.ProtocolP
 	rjMin, rjMax := rangeDB(p.IsV31(), p.RejectAfterTime)
 	kaMin, kaMax := rangeDB(p.IsV31(), p.KeepaliveTimeout)
 	mhMin, mhMax := rangeDB(p.IsV31(), p.MaxHandshakeAttempts)
+	pkMin, pkMax := rangeDB(p.IsV31(), p.PersistentKeepalive)
 
 	q := `
 INSERT INTO protocol_profiles(
@@ -63,12 +65,13 @@ INSERT INTO protocol_profiles(
     reject_after_time_min, reject_after_time_max,
     keepalive_timeout_min, keepalive_timeout_max,
     max_handshake_attempts_min, max_handshake_attempts_max,
+    persistent_keepalive_min, persistent_keepalive_max,
     random_trailers, disable_cookies
 ) VALUES (
     $1,$2,$3,$4,$5,$6,$7,$8,$9,
     $10,$11,$12,$13,$14,$15,$16,$17,
     $18,$19,$20,$21,$22,$23,
-    $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
+    $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40
 )
 RETURNING ` + profileReturningColumns
 
@@ -78,7 +81,7 @@ RETURNING ` + profileReturningColumns
 		nullable(p.I1), nullable(p.I2), nullable(p.I3), nullable(p.I4), nullable(p.I5),
 		p.ListenPortPolicy,
 		nullableWhen(p.IsV31(), p.HeaderProtectionKey),
-		cpMin, cpMax, raMin, raMax, rtMin, rtMax, rjMin, rjMax, kaMin, kaMax, mhMin, mhMax,
+		cpMin, cpMax, raMin, raMax, rtMin, rtMax, rjMin, rjMax, kaMin, kaMax, mhMin, mhMax, pkMin, pkMax,
 		boolWhen(p.IsV31(), p.RandomTrailers), boolWhen(p.IsV31(), p.DisableCookies),
 	)
 	return scanProfile(row)
@@ -102,7 +105,7 @@ func scanProfile(row pgx.Row) (*domain.ProtocolProfile, error) {
 	var i1, i2, i3, i4, i5 *string
 	var headerProtectionKey *string
 	var cpMin, cpMax, raMin, raMax, rtMin, rtMax *int32
-	var rjMin, rjMax, kaMin, kaMax, mhMin, mhMax *int32
+	var rjMin, rjMax, kaMin, kaMax, mhMin, mhMax, pkMin, pkMax *int32
 	var randomTrailers, disableCookies *bool
 
 	if err := row.Scan(
@@ -111,7 +114,7 @@ func scanProfile(row pgx.Row) (*domain.ProtocolProfile, error) {
 		&i1, &i2, &i3, &i4, &i5, &out.ListenPortPolicy,
 		&headerProtectionKey,
 		&cpMin, &cpMax, &raMin, &raMax, &rtMin, &rtMax,
-		&rjMin, &rjMax, &kaMin, &kaMax, &mhMin, &mhMax,
+		&rjMin, &rjMax, &kaMin, &kaMax, &mhMin, &mhMax, &pkMin, &pkMax,
 		&randomTrailers, &disableCookies, &out.CreatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -129,6 +132,7 @@ func scanProfile(row pgx.Row) (*domain.ProtocolProfile, error) {
 	out.RejectAfterTime = rangeFromDB(rjMin, rjMax)
 	out.KeepaliveTimeout = rangeFromDB(kaMin, kaMax)
 	out.MaxHandshakeAttempts = rangeFromDB(mhMin, mhMax)
+	out.PersistentKeepalive = rangeFromDB(pkMin, pkMax)
 	out.RandomTrailers = derefBool(randomTrailers)
 	out.DisableCookies = derefBool(disableCookies)
 	return &out, nil
