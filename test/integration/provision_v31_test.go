@@ -114,3 +114,65 @@ func TestProvisionV31Node_CreateOnlyAndAtomic(t *testing.T) {
 	require.Equal(t, 1, profileCount, "failed transaction must not leave a partial profile")
 	require.Equal(t, 1, nodeCount, "failed transaction must not leave a partial node")
 }
+
+func TestProvisionV31Node_ConcurrentCommandsCannotReuseUDPPort(t *testing.T) {
+	ctx := context.Background()
+	db := startPostgres(ctx, t)
+	tenant, err := (&repo.Tenants{DB: db}).Upsert(ctx, "default")
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	first := bootstrap.V31NodeOptions{
+		TenantSlug: tenant.Slug, ProfileName: "concurrent-a",
+		NodeRegion: "eu", NodeHostname: "node-concurrent-a.test",
+		NodeEndpoint: "203.0.113.50", NodeBasePort: 38824,
+		NodeIface: "awg31a", PoolCIDR: "10.211.0.0/24",
+		BootstrapConfDir: dir,
+	}
+	second := first
+	second.ProfileName = "concurrent-b"
+	second.NodeHostname = "node-concurrent-b.test"
+	second.NodeIface = "awg31b"
+	second.PoolCIDR = "10.212.0.0/24"
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, opts := range []bootstrap.V31NodeOptions{first, second} {
+		opts := opts
+		go func() {
+			<-start
+			_, provisionErr := bootstrap.ProvisionV31Node(ctx, db, opts, obs.NewLogger("error", false))
+			results <- provisionErr
+		}()
+	}
+	close(start)
+	err1, err2 := <-results, <-results
+	successes := 0
+	for _, attemptErr := range []error{err1, err2} {
+		if attemptErr == nil {
+			successes++
+		} else {
+			require.Contains(t, attemptErr.Error(), "UDP port",
+				"the competing operator should see the deterministic port conflict")
+		}
+	}
+	require.Equal(t, 1, successes, "only one concurrent provisioning may commit")
+
+	var nodes, profiles, pools int
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM vpn_nodes WHERE base_port=38824`).Scan(&nodes))
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM protocol_profiles WHERE name IN ('concurrent-a', 'concurrent-b')`).Scan(&profiles))
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM address_pools WHERE cidr IN ('10.211.0.0/24', '10.212.0.0/24')`).Scan(&pools))
+	require.Equal(t, 1, nodes)
+	require.Equal(t, 1, profiles)
+	require.Equal(t, 1, pools)
+
+	_, statA := os.Stat(filepath.Join(dir, "awg31a.conf"))
+	_, statB := os.Stat(filepath.Join(dir, "awg31b.conf"))
+	require.NotEqual(t, statA == nil, statB == nil,
+		"only the winning transaction may retain its local bootstrap file")
+	if statA != nil { require.True(t, os.IsNotExist(statA), "%v", statA) }
+	if statB != nil { require.True(t, os.IsNotExist(statB), "%v", statB) }
+}
