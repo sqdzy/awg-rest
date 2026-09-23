@@ -110,6 +110,13 @@ func ProvisionV31Node(ctx context.Context, db *repo.DB, opts V31NodeOptions, log
 	var configCreated bool
 
 	err = db.InTx(ctx, func(tx pgx.Tx) error {
+		// The availability checks below protect non-unique operational values
+		// (local interface names, UDP ports and overlapping CIDRs). Serialize
+		// operator provisioning so two concurrent commands cannot both pass.
+		// The lock is transaction-scoped and released on commit or rollback.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", int64(0x4157473331)); err != nil {
+			return fmt.Errorf("acquire v3.1 provisioning lock: %w", err)
+		}
 		if err := ensureV31ProvisioningAvailable(ctx, tx, opts, poolCIDR); err != nil {
 			return err
 		}
