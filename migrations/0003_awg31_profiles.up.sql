@@ -15,8 +15,6 @@ ALTER TABLE protocol_profiles
     ADD COLUMN IF NOT EXISTS keepalive_timeout_max INT,
     ADD COLUMN IF NOT EXISTS max_handshake_attempts_min INT,
     ADD COLUMN IF NOT EXISTS max_handshake_attempts_max INT,
-    ADD COLUMN IF NOT EXISTS persistent_keepalive_min INT,
-    ADD COLUMN IF NOT EXISTS persistent_keepalive_max INT,
     ADD COLUMN IF NOT EXISTS random_trailers BOOLEAN,
     ADD COLUMN IF NOT EXISTS disable_cookies BOOLEAN;
 
@@ -30,8 +28,7 @@ BEGIN
         'rekey_timeout_min', 'rekey_timeout_max',
         'reject_after_time_min', 'reject_after_time_max',
         'keepalive_timeout_min', 'keepalive_timeout_max',
-        'max_handshake_attempts_min', 'max_handshake_attempts_max',
-        'persistent_keepalive_min', 'persistent_keepalive_max'
+        'max_handshake_attempts_min', 'max_handshake_attempts_max'
     ]
     LOOP
         BEGIN
@@ -114,81 +111,6 @@ BEGIN
         CHECK (
             max_handshake_attempts_min IS NULL OR max_handshake_attempts_max IS NULL OR
             max_handshake_attempts_min <= max_handshake_attempts_max
-        );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END
-$$;
-
-DO $$
-BEGIN
-    ALTER TABLE protocol_profiles
-        ADD CONSTRAINT protocol_profiles_persistent_keepalive_order_check
-        CHECK (
-            persistent_keepalive_min IS NULL OR persistent_keepalive_max IS NULL OR
-            persistent_keepalive_min <= persistent_keepalive_max
-        );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END
-$$;
-
-DO $$
-BEGIN
-    ALTER TABLE protocol_profiles
-        ADD CONSTRAINT protocol_profiles_version_check
-        CHECK (protocol_version IN ('v1', 'v2', 'v3.1'));
-EXCEPTION WHEN duplicate_object THEN NULL;
-END
-$$;
-
-DO $$
-BEGIN
-    ALTER TABLE protocol_profiles
-        ADD CONSTRAINT protocol_profiles_awg31_pair_completeness_check
-        CHECK (
-            (content_padding_addition_min IS NULL) = (content_padding_addition_max IS NULL) AND
-            (rekey_after_time_min IS NULL) = (rekey_after_time_max IS NULL) AND
-            (rekey_timeout_min IS NULL) = (rekey_timeout_max IS NULL) AND
-            (reject_after_time_min IS NULL) = (reject_after_time_max IS NULL) AND
-            (keepalive_timeout_min IS NULL) = (keepalive_timeout_max IS NULL) AND
-            (max_handshake_attempts_min IS NULL) = (max_handshake_attempts_max IS NULL) AND
-            (persistent_keepalive_min IS NULL) = (persistent_keepalive_max IS NULL)
-        );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END
-$$;
-
-DO $$
-BEGIN
-    ALTER TABLE protocol_profiles
-        ADD CONSTRAINT protocol_profiles_awg31_legacy_null_check
-        CHECK (
-            protocol_version = 'v3.1' OR (
-                header_protection_key IS NULL AND
-                content_padding_addition_min IS NULL AND content_padding_addition_max IS NULL AND
-                rekey_after_time_min IS NULL AND rekey_after_time_max IS NULL AND
-                rekey_timeout_min IS NULL AND rekey_timeout_max IS NULL AND
-                reject_after_time_min IS NULL AND reject_after_time_max IS NULL AND
-                keepalive_timeout_min IS NULL AND keepalive_timeout_max IS NULL AND
-                max_handshake_attempts_min IS NULL AND max_handshake_attempts_max IS NULL AND
-                persistent_keepalive_min IS NULL AND persistent_keepalive_max IS NULL AND
-                random_trailers IS NULL AND disable_cookies IS NULL
-            )
-        );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END
-$$;
-
-DO $$
-BEGIN
-    ALTER TABLE protocol_profiles
-        ADD CONSTRAINT protocol_profiles_awg31_required_check
-        CHECK (
-            protocol_version <> 'v3.1' OR (
-                header_protection_key IS NOT NULL AND
-                length(header_protection_key) > 0 AND
-                random_trailers IS NOT NULL AND
-                disable_cookies IS NOT NULL
-            )
         );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END

@@ -98,7 +98,8 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID: &profile.ID,
-		Region:    "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
+		IsDefault: true,
+		Region: "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
 		BasePort: 585, InterfaceName: "awg0",
 		ServerPublicKey: serverKP.PublicKey,
 	})
@@ -382,11 +383,11 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 		Name: "default-v31", ProtocolVersion: domain.ProtocolV31,
 		Jc: 5, Jmin: 10, Jmax: 50,
 		S1: 12, S2: 12, S3: 12, S4: 12,
-		H1:                     domain.IntRange{Min: 1, Max: 1},
-		H2:                     domain.IntRange{Min: 2, Max: 2},
-		H3:                     domain.IntRange{Min: 3, Max: 3},
-		H4:                     domain.IntRange{Min: 4, Max: 4},
-		I1:                     "<r 2><b 0x00ff>",
+		H1: domain.IntRange{Min: 1, Max: 1},
+		H2: domain.IntRange{Min: 2, Max: 2},
+		H3: domain.IntRange{Min: 3, Max: 3},
+		H4: domain.IntRange{Min: 4, Max: 4},
+		I1: "<r 2><b 0x00ff>",
 		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
 		ContentPaddingAddition: domain.Uint16Range{Min: 10, Max: 100},
 		RekeyAfterTime:         domain.Uint16Range{Min: 100, Max: 120},
@@ -394,7 +395,6 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 		RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
-		PersistentKeepalive:    domain.Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 		ListenPortPolicy:       "fixed",
@@ -406,8 +406,8 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	v31Node, err := env.Service.Nodes.Insert(ctx, domain.Node{
 		ProfileID:       &v31.ID,
 		Region:          "eu",
-		Hostname:        "vpn-31.test",
-		PublicEndpoint:  "vpn-31.test:586",
+		Hostname:        "aaa-v31.test",
+		PublicEndpoint:  "aaa-v31.test:586",
 		BasePort:        586,
 		InterfaceName:   "awg31",
 		ServerPublicKey: v31KP.PublicKey,
@@ -418,40 +418,33 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.NoError(t, err)
 	env.Executor.Provision("awg31", v31KP.PrivateKey, v31KP.PublicKey, 586)
 
+	defaultResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-default-v2", map[string]any{
+			"external_id": "dual-default-v2",
+		})
+	require.Equal(t, http.StatusAccepted, defaultResp.StatusCode)
+	var createdDefault api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(defaultResp.Body).Decode(&createdDefault))
+	defaultResp.Body.Close()
+	require.Equal(t, env.Node.ID.String(), createdDefault.NodeID,
+		"an unpinned create must stay on the explicit V2 default even when V3.1 hostname sorts first")
+	require.Equal(t, env.Profile.ID.String(), createdDefault.ProfileID)
+
 	v31Resp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
 		bearer, "dual-v31", map[string]any{
-			"external_id": "dual-v31",
-			"node_id":     v31Node.ID.String(),
+			"external_id":   "dual-v31",
+			"node_hostname": v31Node.Hostname,
+			"profile_name":  v31.Name,
 		})
 	require.Equal(t, http.StatusAccepted, v31Resp.StatusCode)
 	var created31 api.CreatePeerResponse
 	require.NoError(t, json.NewDecoder(v31Resp.Body).Decode(&created31))
 	v31Resp.Body.Close()
+	require.Equal(t, v31Node.ID.String(), created31.NodeID)
 	require.Equal(t, v31.ID.String(), created31.ProfileID)
 	require.Contains(t, created31.ClientConfig, "HeaderProtectionKey = ")
 	require.Contains(t, created31.ClientConfig, "RandomTrailers = on")
 	require.Contains(t, created31.ClientConfig, "DisableCookies = on")
-	require.Contains(t, created31.ClientConfig, "PersistentKeepalive = 25-35")
-
-	externalKP, err := crypto.GenerateKeyPair()
-	require.NoError(t, err)
-	externalResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
-		bearer, "dual-v31-external-key", map[string]any{
-			"external_id": "dual-v31-external-key",
-			"node_id":     v31Node.ID.String(),
-			"public_key":  externalKP.PublicKey,
-		})
-	require.Equal(t, http.StatusAccepted, externalResp.StatusCode)
-	var externalCreated api.CreatePeerResponse
-	require.NoError(t, json.NewDecoder(externalResp.Body).Decode(&externalCreated))
-	externalResp.Body.Close()
-	require.Empty(t, externalCreated.PrivateKey,
-		"server must not invent or return a private key when caller supplied the public key")
-	require.Contains(t, externalCreated.ClientConfig, "HeaderProtectionKey = ")
-	require.Contains(t, externalCreated.ClientConfig, "PresharedKey = "+externalCreated.PresharedKey)
-	require.Contains(t, externalCreated.ClientConfig, "PersistentKeepalive = 25-35")
-	require.NotContains(t, externalCreated.ClientConfig, "PrivateKey =",
-		"one-time config for an external key is a mergeable secret skeleton")
 
 	cfgResp := getJSON(t, client,
 		env.Server.URL+"/v1/tenants/acme/peers/"+created31.PeerID+"/configuration", bearer)
@@ -460,13 +453,31 @@ func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
 	require.NotContains(t, cfgBody, "HeaderProtectionKey",
 		"non-secret configuration endpoint must not return V3.1 header key")
 
-	ran, err = env.Worker.RunOnce(ctx)
-	require.NoError(t, err)
-	require.True(t, ran)
+	for range 2 {
+		ran, err = env.Worker.RunOnce(ctx)
+		require.NoError(t, err)
+		require.True(t, ran)
+	}
 
-	require.Len(t, env.Executor.Snapshot("awg0"), 1, "V3.1 reconcile must not alter V2 interface")
-	require.Len(t, env.Executor.Snapshot("awg31"), 2,
-		"both V3.1 peers, including the client-owned-key peer, must reconcile onto awg31")
+	require.Len(t, env.Executor.Snapshot("awg0"), 2, "V3.1 reconcile must not alter V2 interface")
+	require.Len(t, env.Executor.Snapshot("awg31"), 1)
+
+	require.NoError(t, env.Service.Nodes.SetAcceptNewPeers(ctx, v31Node.ID, false))
+	drainedResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-v31-drained", map[string]any{
+			"external_id":   "dual-v31-drained",
+			"node_hostname": v31Node.Hostname,
+		})
+	require.Equal(t, http.StatusUnprocessableEntity, drainedResp.StatusCode)
+	var drainedProblem map[string]any
+	require.NoError(t, json.NewDecoder(drainedResp.Body).Decode(&drainedProblem))
+	drainedResp.Body.Close()
+	require.Equal(t, "validation_failed", drainedProblem["code"])
+
+	var drainedCount int
+	require.NoError(t, env.DB.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM peers WHERE external_id = 'dual-v31-drained'`).Scan(&drainedCount))
+	require.Zero(t, drainedCount)
 }
 
 func TestE2E_Auth_Rejects(t *testing.T) {

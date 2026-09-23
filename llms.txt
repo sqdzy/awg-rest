@@ -1,6 +1,6 @@
 # awg-rest
 
-> Internal versioned AmneziaWG V1/V2/V3.1 REST control plane for backend containers. Go API,
+> Internal AmneziaWG V2 REST control plane for backend containers. Go API,
 > embedded Postgres desired state, durable worker, JWT/RBAC, OpenAPI, Docker,
 > and a GHCR all-in-one image.
 
@@ -12,7 +12,7 @@ backend integration, not for public internet exposure.
 
 ## Find This Project When Searching For
 
-AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG 3.1 API, AmneziaWG control plane, VPN peer
+AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG control plane, VPN peer
 management API, WireGuard REST API, Go VPN backend, Docker AmneziaWG API,
 multi-tenant VPN provisioning, idempotent peer creation, Postgres VPN desired
 state, AmneziaWG automation, awg-rest all-in-one, awg-api.
@@ -61,14 +61,6 @@ state, AmneziaWG automation, awg-rest all-in-one, awg-api.
 
 ## Best One-Sentence Summary
 
-`awg-rest` is a production-oriented internal REST API for versioned AmneziaWG
-V1/V2/V3.1 peer provisioning, shipped as an all-in-one Docker image with embedded Postgres,
+`awg-rest` is a production-oriented internal REST API for AmneziaWG V2 peer
+provisioning, shipped as an all-in-one Docker image with embedded Postgres,
 durable desired state, and an embedded worker that applies peers to AmneziaWG.
-
-
-## AmneziaWG 3.1 rollout
-
-V3.1 is not an in-place rewrite of the bootstrap V2 node. Operators can publish
-the optional second UDP port with `compose.v31.yaml` and create a parallel V3.1
-profile/node/pool with `/awg-api -provision-v31-node`. See
-`docs/awg31-migration.md` for compatibility gates and rollback guidance.

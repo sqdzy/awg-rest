@@ -88,58 +88,6 @@ profiles.
 
 Back up both Docker volumes. `awg-state` contains the server private key.
 
-### Parallel AmneziaWG 3.1 rollout
-
-Existing installations stay on the bootstrap V2 node until an operator explicitly
-creates a separate V3.1 node. The supported rollout path does not rewrite V2
-profiles or peers.
-
-Expose a second UDP port:
-
-```bash
-docker compose -f compose.yaml -f compose.v31.yaml up -d
-```
-
-Then create the V3.1 profile, node, address pool, server key and bootstrap
-configuration inside the running all-in-one container:
-
-```bash
-docker compose exec -T awg-rest /awg-api -provision-v31-node
-```
-
-The command is create-only and fails rather than overwriting an existing
-profile, hostname, interface, UDP port, bootstrap config, or overlapping CIDR.
-Defaults are:
-
-- profile `default-v31`
-- node `awg-node-31`
-- interface `awg31`
-- UDP `38824`
-- pool `10.201.0.0/24`
-- the same public endpoint, region, NAT setting and egress interface as the
-  initial bootstrap node
-
-It prints non-secret JSON including the new `node_id`. Pass that `node_id`
-when creating V3.1 peers; omitting `node_id` continues to use the normal
-deterministic node selection and should not be relied on for migration.
-
-The generated V3.1 preset follows the parameters currently assigned by the
-Amnezia client installer: `S1-S4=12`, fixed `H1-H4=1/2/3/4`, a fresh
-HeaderProtectionKey, timings `100-120 / 3-7 / 150-180 / 5-15 / 15-20`,
-`PersistentKeepalive=25-35`, `RandomTrailers=on`, `DisableCookies=on`,
-and the current default I1 packet. `ContentPaddingAddition` is deliberately
-left unset: the current client defines `10-100` as a constant but does not
-assign it in `generateAwgParameters()`.
-
-For non-default ports or networks, inspect the CLI options with
-`/awg-api -h`. If the external port is translated by NAT, set
-`-v31-node-endpoint` to a `host:external-port` value while
-`-v31-node-port` remains the local AWG listen port.
-
-Stopping publication of the second UDP port immediately removes the V3.1 path
-from external reachability without affecting the original V2 interface. Do not
-delete or rewrite V2 profiles during a canary migration.
-
 ## Connect Your Backend
 
 Attach your backend container to the same Docker network:
@@ -216,15 +164,12 @@ parameters for every other peer on the same node.
 
 The first create response includes one-time secret material:
 
-- `private_key` when awg-rest generated the client keypair;
-- `client_config` on every successful first create;
-- `preshared_key`.
+- `private_key`
+- `client_config`
+- `preshared_key`
 
-When the caller supplied `public_key`, `client_config` intentionally omits
-`PrivateKey` but still carries the one-time protocol secrets (including the
-V3.1 HeaderProtectionKey and PSK). Merge the locally owned private key before
-importing the config. Store/deliver this one-time response securely: secret
-fields are not returned again on idempotency replay.
+Store `client_config` in your backend and deliver it to the user once. It is not
+returned again on idempotency replay.
 
 The generated `client_config` is intentionally rendered as a full-tunnel
 AmneziaVPN-importable AWG config:
@@ -238,6 +183,57 @@ AmneziaVPN applies site/app split tunneling as an application-level setting
 after the config is imported. Keeping the imported AWG/WireGuard peer
 full-tunnel lets the AmneziaVPN client enable and manage split tunneling from
 its own UI.
+
+### Opt-in AmneziaWG 3.1 node
+
+The base deployment intentionally keeps the existing V2 node as the default.
+To add a parallel V3.1 interface without changing existing peers or unpinned
+create-peer calls, enable the rollout override:
+
+```bash
+docker compose -f compose.yaml -f compose.awg31.yaml up -d
+```
+
+This adds, by default:
+
+- profile `default-v3.1`;
+- node `awg-node-31` on interface `awg31`;
+- VPN pool `10.201.0.0/24`;
+- UDP listener `38824/udp`.
+
+The V3.1 profile uses the fixed H1-H4 safety preset verified by the real
+userspace network gate. The legacy V2 node remains `is_default=true`.
+
+Place a new peer on V3.1 by stable node hostname:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:18080/v1/tenants/default/peers" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: user-124-create-v31" \
+  -d '{
+    "external_id": "user-124",
+    "display_name": "User 124",
+    "node_hostname": "awg-node-31",
+    "profile_name": "default-v3.1"
+  }'
+```
+
+`profile_name` is optional here and acts only as an assertion. Omitting both
+`node_id` and `node_hostname` continues to place the peer on the explicit
+default V2 node.
+
+For a graceful rollback/drain, keep the V3.1 override and set:
+
+```dotenv
+BOOTSTRAP_V31_ACCEPT_NEW_PEERS=false
+```
+
+Then redeploy with both Compose files. Existing V3.1 peers/interface/listener
+remain, but the API rejects new placements on that node. After existing V3.1
+peers are migrated/revoked, removing `compose.awg31.yaml` closes the second
+host UDP publication; startup also leaves the persisted V3.1 node in
+`accept_new_peers=false` rather than deleting state or rotating keys.
 
 Poll the operation:
 
@@ -289,8 +285,7 @@ Important `.env` values:
 | `JWT_SECRET` | HMAC signing secret shared only with your backend |
 | `AWG_API_BIND` | host binding for REST API, keep loopback-only |
 | `AWG_UDP_BIND` | host UDP binding for VPN traffic |
-| `AWG_UDP_PORT` | UDP listen port inside V2 bootstrap client configs |
-| `AWG31_UDP_BIND` / `AWG31_UDP_PORT` | optional second published/listen port used by `compose.v31.yaml` |
+| `AWG_UDP_PORT` | UDP listen port inside client configs |
 | `BOOTSTRAP_POOL_CIDR` | VPN client address pool |
 | `AWG_INTERNAL_NETWORK` | Docker network for backend-to-API traffic |
 

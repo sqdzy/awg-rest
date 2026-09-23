@@ -169,17 +169,18 @@ func TestIntRange_String(t *testing.T) {
 	require.Equal(t, "5-9", IntRange{Min: 5, Max: 9}.String())
 }
 
+
 func validV31() ProtocolProfile {
 	return ProtocolProfile{
 		Name:            "default-v31",
 		ProtocolVersion: ProtocolV31,
 		Jc:              5, Jmin: 10, Jmax: 50,
 		S1: 12, S2: 12, S3: 12, S4: 12,
-		H1:                     IntRange{Min: 1, Max: 1},
-		H2:                     IntRange{Min: 2, Max: 2},
-		H3:                     IntRange{Min: 3, Max: 3},
-		H4:                     IntRange{Min: 4, Max: 4},
-		I1:                     "<r 2><b 0x00ff>",
+		H1: IntRange{Min: 1, Max: 1},
+		H2: IntRange{Min: 2, Max: 2},
+		H3: IntRange{Min: 3, Max: 3},
+		H4: IntRange{Min: 4, Max: 4},
+		I1:              "<r 2><b 0x00ff>",
 		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
 		ContentPaddingAddition: Uint16Range{Min: 10, Max: 100},
 		RekeyAfterTime:         Uint16Range{Min: 100, Max: 120},
@@ -187,7 +188,6 @@ func validV31() ProtocolProfile {
 		RejectAfterTime:        Uint16Range{Min: 150, Max: 180},
 		KeepaliveTimeout:       Uint16Range{Min: 5, Max: 15},
 		MaxHandshakeAttempts:   Uint16Range{Min: 15, Max: 20},
-		PersistentKeepalive:    Uint16Range{Min: 25, Max: 35},
 		RandomTrailers:         true,
 		DisableCookies:         true,
 	}
@@ -248,6 +248,7 @@ func TestUint16Range_StringAndZero(t *testing.T) {
 	require.False(t, (Uint16Range{Min: 1, Max: 1}).IsZero())
 }
 
+
 func TestProtocolProfile_JSONDoesNotExposeHeaderProtectionKey(t *testing.T) {
 	t.Parallel()
 	p := validV31()
@@ -256,6 +257,7 @@ func TestProtocolProfile_JSONDoesNotExposeHeaderProtectionKey(t *testing.T) {
 	require.NotContains(t, string(b), "header_protection_key")
 	require.NotContains(t, string(b), p.HeaderProtectionKey)
 }
+
 
 func TestProtocolProfile_V31HeaderProtectionRequiresTwelveBytePaddings(t *testing.T) {
 	t.Parallel()
@@ -287,6 +289,7 @@ func TestProtocolProfile_V31HeaderProtectionRequiresTwelveBytePaddings(t *testin
 		})
 	}
 }
+
 
 func TestProtocolProfile_SpecialJunkValidation(t *testing.T) {
 	t.Parallel()

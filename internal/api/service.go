@@ -49,7 +49,8 @@ func (s *Service) now() time.Time {
 type CreatePeerRequest struct {
 	ExternalID  string     `json:"external_id"`
 	DisplayName string     `json:"display_name"`
-	NodeID      *string    `json:"node_id,omitempty"`
+	NodeID       *string    `json:"node_id,omitempty"`
+	NodeHostname *string    `json:"node_hostname,omitempty"`
 	ProfileID   *string    `json:"profile_id,omitempty"`
 	ProfileName *string    `json:"profile_name,omitempty"`
 	PublicKey   *string    `json:"public_key,omitempty"`
@@ -64,7 +65,7 @@ type CreatePeerResponse struct {
 	AllowedIP    string `json:"allowed_ip"`
 	PublicKey    string `json:"public_key"`
 	PrivateKey   string `json:"private_key,omitempty"`   // only when server-generated; one-time
-	ClientConfig string `json:"client_config,omitempty"` // one-time; may omit PrivateKey for client-supplied keys
+	ClientConfig string `json:"client_config,omitempty"` // only when server-generated; one-time
 	PresharedKey string `json:"preshared_key,omitempty"`
 	NodeID       string `json:"node_id"`
 	ProfileID    string `json:"profile_id"`
@@ -91,8 +92,15 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 	// profile. Per-peer profile selectors are accepted only as compatibility
 	// assertions and must match the node-owned profile.
 	var node *domain.Node
-	if req.NodeID != nil {
-		id, err := uuid.Parse(*req.NodeID)
+	if req.NodeID != nil && req.NodeHostname != nil {
+		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
+			Field: "node_id", Code: "conflict",
+			Message: "node_id and node_hostname are mutually exclusive",
+		}}
+	}
+	switch {
+	case req.NodeID != nil:
+		id, err := uuid.Parse(strings.TrimSpace(*req.NodeID))
 		if err != nil {
 			return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "node_id", Code: "invalid", Message: "must be a UUID"}}
 		}
@@ -100,11 +108,30 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		if err != nil {
 			return CreatePeerResponse{}, 0, err
 		}
-	} else {
+	case req.NodeHostname != nil:
+		hostname := strings.TrimSpace(*req.NodeHostname)
+		if hostname == "" {
+			return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "node_hostname", Code: "required", Message: "must not be empty"}}
+		}
+		node, err = s.Nodes.GetByHostname(ctx, hostname)
+		if err != nil {
+			return CreatePeerResponse{}, 0, err
+		}
+	default:
 		node, err = s.Nodes.PickFirst(ctx)
 		if err != nil {
 			return CreatePeerResponse{}, 0, err
 		}
+	}
+	if !node.AcceptNewPeers {
+		field := "node_id"
+		if req.NodeHostname != nil {
+			field = "node_hostname"
+		}
+		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
+			Field: field, Code: "provisioning_disabled",
+			Message: "selected node is not accepting new peers",
+		}}
 	}
 	if node.ProfileID == nil {
 		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
@@ -231,15 +258,17 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			NodeID:       node.ID.String(),
 			ProfileID:    profile.ID.String(),
 		}
-		resp.ClientConfig = render.AmneziaClient(render.ClientArgs{
-			ClientPrivateKey: priv,
-			ClientAddress:    []string{peer.AllowedIP.String()},
-			DNS:              s.ClientDNS,
-			ServerPublicKey:  node.ServerPublicKey,
-			ServerEndpoint:   node.PublicEndpoint,
-			PresharedKey:     psk,
-			Keepalive:        25,
-		}, *profile)
+		if priv != "" {
+			resp.ClientConfig = render.AmneziaClient(render.ClientArgs{
+				ClientPrivateKey: priv,
+				ClientAddress:    []string{peer.AllowedIP.String()},
+				DNS:              s.ClientDNS,
+				ServerPublicKey:  node.ServerPublicKey,
+				ServerEndpoint:   node.PublicEndpoint,
+				PresharedKey:     psk,
+				Keepalive:        25,
+			}, *profile)
+		}
 		status = http.StatusAccepted
 		// Persist a sanitized response that does NOT include one-time secret
 		// material, so a replay never re-issues client keys.

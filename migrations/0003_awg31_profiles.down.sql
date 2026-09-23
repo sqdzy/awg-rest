@@ -1,8 +1,6 @@
 ALTER TABLE protocol_profiles
     DROP COLUMN IF EXISTS disable_cookies,
     DROP COLUMN IF EXISTS random_trailers,
-    DROP COLUMN IF EXISTS persistent_keepalive_max,
-    DROP COLUMN IF EXISTS persistent_keepalive_min,
     DROP COLUMN IF EXISTS max_handshake_attempts_max,
     DROP COLUMN IF EXISTS max_handshake_attempts_min,
     DROP COLUMN IF EXISTS keepalive_timeout_max,

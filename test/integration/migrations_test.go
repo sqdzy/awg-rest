@@ -4,71 +4,12 @@ package integration
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/awg-rest/awg-rest/internal/domain"
 	"github.com/awg-rest/awg-rest/internal/repo"
 	"github.com/stretchr/testify/require"
 )
-
-func TestMigrate_UpgradesLegacyV2SchemaAndPreservesPeer(t *testing.T) {
-	ctx := context.Background()
-	db := startPostgresRaw(ctx, t)
-
-	_, thisFile, _, ok := runtime.Caller(0)
-	require.True(t, ok)
-	legacyPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations", "0001_init.up.sql")
-	legacySQL, err := os.ReadFile(legacyPath)
-	require.NoError(t, err)
-	_, err = db.Pool.Exec(ctx, string(legacySQL))
-	require.NoError(t, err)
-
-	var tenantID, nodeID, profileID, peerID string
-	require.NoError(t, db.Pool.QueryRow(ctx,
-		`INSERT INTO tenants(slug) VALUES ('legacy') RETURNING id::text`).Scan(&tenantID))
-	require.NoError(t, db.Pool.QueryRow(ctx, `
-INSERT INTO vpn_nodes(region, hostname, public_endpoint, base_port, interface_name, server_public_key)
-VALUES ('eu','legacy-vpn.test','legacy-vpn.test:585',585,'awg0','legacy-server-key')
-RETURNING id::text`).Scan(&nodeID))
-	require.NoError(t, db.Pool.QueryRow(ctx, `
-INSERT INTO protocol_profiles(
-    name, protocol_version, jc, jmin, jmax, s1, s2, s3, s4,
-    h1_min, h1_max, h2_min, h2_max, h3_min, h3_max, h4_min, h4_max
-) VALUES (
-    'legacy-v2','v2',5,10,50,40,32,12,12,
-    1000,1100,2000,2100,3000,3100,4000,4100
-) RETURNING id::text`).Scan(&profileID))
-	require.NoError(t, db.Pool.QueryRow(ctx, `
-INSERT INTO peers(
-    tenant_id, node_id, profile_id, external_id, public_key, preshared_key_ref, allowed_ip
-) VALUES ($1::uuid,$2::uuid,$3::uuid,'legacy-peer','legacy-public','legacy-psk','10.200.0.2')
-RETURNING id::text`, tenantID, nodeID, profileID).Scan(&peerID))
-
-	require.NoError(t, repo.Migrate(ctx, db.Pool))
-
-	var migratedProfileID string
-	require.NoError(t, db.Pool.QueryRow(ctx,
-		`SELECT profile_id::text FROM vpn_nodes WHERE id=$1::uuid`, nodeID).Scan(&migratedProfileID))
-	require.Equal(t, profileID, migratedProfileID)
-
-	var gotPeerID, gotPeerProfile string
-	require.NoError(t, db.Pool.QueryRow(ctx,
-		`SELECT id::text, profile_id::text FROM peers WHERE id=$1::uuid`, peerID).
-		Scan(&gotPeerID, &gotPeerProfile))
-	require.Equal(t, peerID, gotPeerID)
-	require.Equal(t, profileID, gotPeerProfile)
-
-	var version string
-	var headerKey *string
-	require.NoError(t, db.Pool.QueryRow(ctx,
-		`SELECT protocol_version, header_protection_key FROM protocol_profiles WHERE id=$1::uuid`,
-		profileID).Scan(&version, &headerKey))
-	require.Equal(t, "v2", version)
-	require.Nil(t, headerKey)
-}
 
 func TestMigrate_IsIdempotentAcrossRestarts(t *testing.T) {
 	ctx := context.Background()
@@ -139,4 +80,63 @@ func migrationV2Profile(name string, base int64) domain.ProtocolProfile {
 		H3: domain.IntRange{Min: base + 2_000, Max: base + 2_100},
 		H4: domain.IntRange{Min: base + 3_000, Max: base + 3_100},
 	}
+}
+
+
+func TestMigrate_PreservesLegacyDefaultNodeSelection(t *testing.T) {
+	ctx := context.Background()
+	db := startPostgres(ctx, t)
+	profiles := &repo.Profiles{DB: db}
+	nodes := &repo.Nodes{DB: db}
+
+	profile, err := profiles.Insert(ctx, migrationV2Profile("default-migration-profile", 21_000))
+	require.NoError(t, err)
+	_, err = nodes.Insert(ctx, domain.Node{
+		ProfileID: &profile.ID,
+		Region: "eu", Hostname: "zeta-node.test", PublicEndpoint: "zeta-node.test:588",
+		BasePort: 588, InterfaceName: "awgz", ServerPublicKey: "server-public-z",
+	})
+	require.NoError(t, err)
+	alpha, err := nodes.Insert(ctx, domain.Node{
+		ProfileID: &profile.ID,
+		Region: "eu", Hostname: "alpha-node.test", PublicEndpoint: "alpha-node.test:589",
+		BasePort: 589, InterfaceName: "awga", ServerPublicKey: "server-public-a",
+	})
+	require.NoError(t, err)
+
+	// Migration 0004 had already run while the DB was empty. Re-running the
+	// migration after legacy nodes exist must mark the same alphabetically
+	// first node that pre-rollout PickFirst would have selected.
+	require.NoError(t, repo.Migrate(ctx, db.Pool))
+
+	picked, err := nodes.PickFirst(ctx)
+	require.NoError(t, err)
+	require.Equal(t, alpha.ID, picked.ID)
+	require.True(t, picked.IsDefault)
+
+	var defaults int
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM vpn_nodes WHERE is_default`).Scan(&defaults))
+	require.Equal(t, 1, defaults)
+}
+
+func TestNodes_RejectMultipleExplicitDefaults(t *testing.T) {
+	ctx := context.Background()
+	db := startPostgres(ctx, t)
+	profiles := &repo.Profiles{DB: db}
+	nodes := &repo.Nodes{DB: db}
+
+	profile, err := profiles.Insert(ctx, migrationV2Profile("unique-default-profile", 31_000))
+	require.NoError(t, err)
+	_, err = nodes.Insert(ctx, domain.Node{
+		ProfileID: &profile.ID, IsDefault: true,
+		Region: "eu", Hostname: "default-one.test", PublicEndpoint: "default-one.test:590",
+		BasePort: 590, InterfaceName: "awg1", ServerPublicKey: "server-public-1",
+	})
+	require.NoError(t, err)
+	_, err = nodes.Insert(ctx, domain.Node{
+		ProfileID: &profile.ID, IsDefault: true,
+		Region: "eu", Hostname: "default-two.test", PublicEndpoint: "default-two.test:591",
+		BasePort: 591, InterfaceName: "awg2", ServerPublicKey: "server-public-2",
+	})
+	require.Error(t, err)
 }

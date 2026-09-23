@@ -133,6 +133,8 @@ func RunIfEmpty(ctx context.Context, db *repo.DB, d Defaults, logger *slog.Logge
 	nodes := &repo.Nodes{DB: db}
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID:       &profile.ID,
+		IsDefault:       true,
+		AcceptNewPeers:  true,
 		Region:          d.NodeRegion,
 		Hostname:        d.NodeHostname,
 		PublicEndpoint:  endpointWithPort(d.NodeEndpoint, d.NodeBasePort),
