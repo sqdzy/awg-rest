@@ -105,7 +105,43 @@ server key and `0600` bootstrap config in one controlled operation. It rejects
 duplicate profile names, hostnames, interface names, local UDP ports and
 overlapping pools. Returned JSON omits HeaderProtectionKey and the server private
 key. New peers must target the returned `node_id` explicitly during canary
-migration.
+migration. Provisioning takes a PostgreSQL transaction-scoped advisory lock,
+so simultaneous operator commands cannot both claim the same UDP port,
+interface or overlapping address pools.
+
+### Failure recovery and rollback
+
+Provisioning is **create-only**, not an idempotent retry. The profile, node
+and pool rows are written in one database transaction. Normally, a failed
+transaction also removes the newly created local config file. A process or
+host crash between writing the file and committing PostgreSQL can, however,
+leave an **orphaned config file** without corresponding database rows.
+
+After an interrupted command, **inspect before retrying**:
+
+1. Check the non-secret metadata in PostgreSQL for the intended node
+   hostname/interface, profile name and listening port; check whether the
+   corresponding bootstrap `<interface>.conf` file exists. Do not print or
+   paste that file into logs or support tickets: it contains the server private
+   key and HeaderProtectionKey.
+2. If the node/profile/pool and file all exist, treat provisioning as complete.
+   Retrieve the node ID through a restricted database query rather than
+   re-running the command.
+3. If the transaction did not commit but the config file exists, treat it as
+   an orphan. Confirm that no running interface uses it, back it up securely
+   if needed, and resolve it manually before retrying. The CLI deliberately
+   refuses to overwrite an existing config.
+4. If database rows exist but the config is missing, **do not** re-run the
+   generator: it would create different keys. Restore the original file from
+   secure backup or perform a separately planned node/key replacement.
+
+For canary rollback, stop assigning new peers to the V3.1 node, revoke its
+existing peers through the normal API and verify that revoke operations have
+applied. Bring down **only the V3.1 interface** once no peers depend on it;
+preserve the V2 interface, its port, volumes and database. Keep the V3.1
+config and rows under secure backup while investigating. Do not run the
+destructive `0003_awg31_profiles.down.sql` migration or
+`docker compose down -v` as a routine canary rollback.
 
 The V3.1 preset follows the parameters currently assigned by the Amnezia client
 installer. `ContentPaddingAddition` is intentionally omitted because the current
@@ -160,20 +196,15 @@ itself is not presently using.
 - merging the V2 and V3.1 interfaces onto one protocol profile.
 
 
-## Verification evidence — 2026-09-22
+## Verification evidence
 
-GitHub Actions CI run #148 passed the complete gate on the migration branch,
-including the real userspace AWG network E2E. The test built the current
-all-in-one image, extracted `amneziawg-tools v3.1.20260812` and
-`amneziawg-go v3.1.20260828`, and ran the tunnel in isolated Linux network
-namespaces using real TUN interfaces.
+The PR verification gate runs actionlint, gofmt, go vet, build, unit tests,
+PostgreSQL migration/provisioning integration tests, fake-AWG E2E,
+Docker/Compose build, govulncheck, and real userspace AWG network E2E using
+the pinned binaries extracted from the all-in-one image.
 
-Passed real-network scenarios:
-
-- V2 profile on the pinned 3.1-capable userspace runtime;
-- V3.1 profile with fixed H1-H4, HeaderProtectionKey, RandomTrailers and
-  DisableCookies;
-- near-MTU ICMP;
-- TCP echo and UDP echo through the encrypted tunnel;
-- V3.1 rekey with an observed newer handshake;
-- client interface teardown/recreate followed by a fresh handshake and traffic.
+Real-network cases cover V2 on the 3.1 runtime and V3.1 encrypted handshakes,
+near-MTU ICMP, TCP/UDP transfers, rekey, reconnect, extended 3.1 runtime
+dump parsing and ranged PersistentKeepalive introspection. See the current
+GitHub Actions check runs for PR #37 for the exact verified commit; passing
+CI on a parent SHA is not evidence that subsequent commits were tested.
