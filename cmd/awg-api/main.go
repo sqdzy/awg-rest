@@ -3,23 +3,19 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/awg-rest/awg-rest/internal/auth"
 	"github.com/awg-rest/awg-rest/internal/awg"
-	"github.com/awg-rest/awg-rest/internal/bootstrap"
 	"github.com/awg-rest/awg-rest/internal/config"
 	"github.com/awg-rest/awg-rest/internal/nodeagent"
 	"github.com/awg-rest/awg-rest/internal/outbox"
@@ -29,64 +25,14 @@ import (
 )
 
 func main() {
-	bootstrapDefaults := bootstrap.EnvDefaults()
 	devToken := flag.Bool("dev-token", false, "print an HS256 platform_admin JWT for local testing and exit")
 	devTokenTTL := flag.Duration("dev-token-ttl", time.Hour, "TTL for -dev-token")
-
-	provisionV31 := flag.Bool("provision-v31-node", false, "create a parallel AmneziaWG 3.1 profile/node/pool and bootstrap config, then exit")
-	v31Tenant := flag.String("v31-tenant", bootstrapDefaults.TenantSlug, "existing tenant slug for -provision-v31-node")
-	v31Profile := flag.String("v31-profile-name", "default-v31", "new V3.1 protocol profile name")
-	v31Region := flag.String("v31-node-region", bootstrapDefaults.NodeRegion, "new V3.1 node region")
-	v31Hostname := flag.String("v31-node-hostname", "awg-node-31", "new V3.1 node hostname")
-	v31Endpoint := flag.String("v31-node-endpoint", endpointHost(bootstrapDefaults.NodeEndpoint), "public IP or DNS name for the V3.1 node")
-	v31Port := flag.Int("v31-node-port", 38824, "UDP listen/published port for the V3.1 node")
-	v31Iface := flag.String("v31-node-iface", "awg31", "local interface name for the V3.1 node")
-	v31Pool := flag.String("v31-pool-cidr", "10.201.0.0/24", "non-overlapping client address pool for the V3.1 node")
-	v31NAT := flag.Bool("v31-enable-nat", bootstrapDefaults.EnableNAT, "enable NAT hooks in the V3.1 bootstrap config")
-	v31Egress := flag.String("v31-egress-iface", bootstrapDefaults.EgressIface, "egress interface used by V3.1 NAT hooks")
 	flag.Parse()
 
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
 	}
-	if *provisionV31 {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		db, err := repo.NewDB(ctx, cfg.DatabaseURL)
-		if err != nil {
-			exitCLI("connect database", err)
-		}
-		defer db.Close()
-		if err := repo.Migrate(ctx, db.Pool); err != nil {
-			exitCLI("migrate database", err)
-		}
-
-		result, err := bootstrap.ProvisionV31Node(ctx, db, bootstrap.V31NodeOptions{
-			TenantSlug:       *v31Tenant,
-			ProfileName:      *v31Profile,
-			NodeRegion:       *v31Region,
-			NodeHostname:     *v31Hostname,
-			NodeEndpoint:     *v31Endpoint,
-			NodeBasePort:     *v31Port,
-			NodeIface:        *v31Iface,
-			PoolCIDR:         *v31Pool,
-			BootstrapConfDir: cfg.BootstrapConfigDir,
-			EnableNAT:        *v31NAT,
-			EgressIface:      *v31Egress,
-		}, slog.Default())
-		if err != nil {
-			exitCLI("provision V3.1 node", err)
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(result); err != nil {
-			exitCLI("write provisioning result", err)
-		}
-		return
-	}
-
 	if *devToken {
 		tok, err := auth.IssueDevToken(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, auth.Principal{
 			SubjectID: uuid.New(),
@@ -151,11 +97,6 @@ func main() {
 	_ = built.Server.Shutdown(shutdownCtx)
 }
 
-func exitCLI(step string, err error) {
-	fmt.Fprintf(os.Stderr, "awg-api: %s: %v\n", step, err)
-	os.Exit(1)
-}
-
 func buildExecutor(cfg *config.Config, logger *slog.Logger) awg.Executor {
 	switch cfg.EmbeddedWorkerExec {
 	case "remote":
@@ -189,12 +130,4 @@ func buildExecutor(cfg *config.Config, logger *slog.Logger) awg.Executor {
 	default:
 		return awg.NewFakeExecutor(time.Time{})
 	}
-}
-
-func endpointHost(endpoint string) string {
-	endpoint = strings.TrimSpace(endpoint)
-	if host, _, err := net.SplitHostPort(endpoint); err == nil {
-		return host
-	}
-	return endpoint
 }

@@ -26,6 +26,12 @@ services:
       BOOTSTRAP_NODE_BASE_PORT: ${AWG_UDP_PORT:-38823}
       BOOTSTRAP_NODE_IFACE: ${BOOTSTRAP_NODE_IFACE:-awg0}
       BOOTSTRAP_POOL_CIDR: ${BOOTSTRAP_POOL_CIDR:-10.200.0.0/24}
+      # Keep rollout identity visible even when the opt-in override is absent,
+      # so an existing V3.1 node can be put into provisioning-disabled mode.
+      BOOTSTRAP_V31_ENABLED: "false"
+      BOOTSTRAP_V31_TENANT_SLUG: ${BOOTSTRAP_TENANT_SLUG:-default}
+      BOOTSTRAP_V31_PROFILE_NAME: ${BOOTSTRAP_V31_PROFILE_NAME:-default-v3.1}
+      BOOTSTRAP_V31_NODE_HOSTNAME: ${BOOTSTRAP_V31_NODE_HOSTNAME:-awg-node-31}
       BOOTSTRAP_CONF_DIR: /var/lib/awg-rest/bootstrap
       BOOTSTRAP_ENABLE_NAT: ${BOOTSTRAP_ENABLE_NAT:-true}
       BOOTSTRAP_EGRESS_IFACE: ${BOOTSTRAP_EGRESS_IFACE:-eth0}

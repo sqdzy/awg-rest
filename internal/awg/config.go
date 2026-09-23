@@ -61,7 +61,7 @@ func PreserveInterfacePrivateKey(config, currentConfig string) string {
 	return WithInterfaceValue(config, "PrivateKey", value)
 }
 
-// sanitizeSyncConf removes empty optional AmneziaWG V2/V3.1 special-junk keys before
+// sanitizeSyncConf removes empty optional AmneziaWG V2 special-junk keys before
 // feeding stripped config into `awg syncconf`. amneziawg-tools accepts blank
 // I1-I5 in client-style files, but `awg syncconf` rejects lines such as `I2=`.
 func sanitizeSyncConf(config string) string {

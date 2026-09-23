@@ -215,17 +215,16 @@ func dumpHandler(e awg.Executor) http.HandlerFunc {
 		}
 		for _, p := range peers {
 			out.Peers = append(out.Peers, PeerRuntime{
-				PublicKey: p.PublicKey,
+				PublicKey:     p.PublicKey,
 				// Preshared keys are runtime secrets and are deliberately
 				// omitted from the diagnostic/control-plane dump response.
-				PresharedKey:   "",
-				Endpoint:       p.Endpoint,
-				AllowedIPs:     p.AllowedIPs,
-				LastHandshake:  p.LastHandshake,
-				RxBytes:        p.RxBytes,
-				TxBytes:        p.TxBytes,
-				KeepaliveSecs:  p.KeepaliveSecs,
-				KeepaliveRange: p.KeepaliveRange,
+				PresharedKey:  "",
+				Endpoint:      p.Endpoint,
+				AllowedIPs:    p.AllowedIPs,
+				LastHandshake: p.LastHandshake,
+				RxBytes:       p.RxBytes,
+				TxBytes:       p.TxBytes,
+				KeepaliveSecs: p.KeepaliveSecs,
 			})
 		}
 		writeJSON(w, http.StatusOK, out)

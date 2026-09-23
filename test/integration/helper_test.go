@@ -24,14 +24,6 @@ import (
 // and registers a cleanup hook. Returns the configured DB.
 func startPostgres(ctx context.Context, t *testing.T) *repo.DB {
 	t.Helper()
-	db := startPostgresRaw(ctx, t)
-	require.NoError(t, repo.Migrate(ctx, db.Pool))
-	return db
-}
-
-// startPostgresRaw returns an empty test database without applying awg-rest migrations.
-func startPostgresRaw(ctx context.Context, t *testing.T) *repo.DB {
-	t.Helper()
 	disableRyukForLocalTests(t)
 	image := "postgres:15-alpine"
 	pg, err := tcpostgres.Run(ctx,
@@ -55,6 +47,7 @@ func startPostgresRaw(ctx context.Context, t *testing.T) *repo.DB {
 	require.NoError(t, err)
 	t.Cleanup(db.Close)
 
+	require.NoError(t, repo.Migrate(ctx, db.Pool))
 	return db
 }
 
@@ -93,7 +86,8 @@ func seedFixtures(ctx context.Context, t *testing.T, db *repo.DB) fixtures {
 
 	node, err := nodes.Insert(ctx, domain.Node{
 		ProfileID: &prof.ID,
-		Region:    "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
+		IsDefault: true,
+		Region: "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
 		BasePort: 585, InterfaceName: "awg0",
 		ServerPublicKey: "U2VydmVyUHVibGljS2V5MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY=",
 	})

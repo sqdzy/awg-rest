@@ -10,13 +10,13 @@ import (
 
 // ParseShowDump parses the script-friendly output of `awg show <iface> dump`.
 //
-// The peer row stays WireGuard-compatible (8 tab-separated fields), but the
-// interface row is versioned by amneziawg-tools. Legacy/plain WireGuard has
-// four fields while AWG V2/V3.1 insert protocol parameters before fwmark.
-// Therefore only the stable prefix (private/public/listen-port) and the final
-// fwmark field are parsed here.
+// Format: first line is the interface row (4 tab-separated fields), each
+// subsequent line is a peer row (8 fields):
 //
-// Empty fields are reported as "(none)" or "(null)" by upstream tools.
+//	priv  pub  listen-port  fwmark
+//	pub  psk  endpoint  allowed-ips  latest-handshake  rx  tx  keepalive
+//
+// Empty fields are reported as the literal "(none)" by upstream wg/awg.
 func ParseShowDump(s string) (InterfaceRuntime, []PeerRuntime, error) {
 	var iface InterfaceRuntime
 	var peers []PeerRuntime
@@ -41,9 +41,8 @@ func ParseShowDump(s string) (InterfaceRuntime, []PeerRuntime, error) {
 				return iface, nil, fmt.Errorf("invalid listen port: %w", err)
 			}
 			iface.ListenPort = port
-			fwmarkField := fields[len(fields)-1]
-			fwmark, err := strconv.ParseInt(fwmarkField, 0, 64)
-			if err != nil && fwmarkField != "off" {
+			fwmark, err := strconv.ParseInt(fields[3], 0, 64)
+			if err != nil && fields[3] != "off" {
 				return iface, nil, fmt.Errorf("invalid fwmark: %w", err)
 			}
 			iface.FwMark = int(fwmark)
@@ -72,16 +71,11 @@ func ParseShowDump(s string) (InterfaceRuntime, []PeerRuntime, error) {
 		p.RxBytes = rx
 		p.TxBytes = tx
 		if fields[7] != "off" && fields[7] != "" {
-			p.KeepaliveRange = fields[7]
-			if !strings.Contains(fields[7], "-") {
-				ka, err := strconv.Atoi(fields[7])
-				if err != nil {
-					return iface, nil, fmt.Errorf("invalid keepalive: %w", err)
-				}
-				p.KeepaliveSecs = ka
-			} else if err := validateUint16RangeText(fields[7]); err != nil {
-				return iface, nil, fmt.Errorf("invalid keepalive range: %w", err)
+			ka, err := strconv.Atoi(fields[7])
+			if err != nil {
+				return iface, nil, fmt.Errorf("invalid keepalive: %w", err)
 			}
+			p.KeepaliveSecs = ka
 		}
 		peers = append(peers, p)
 	}
@@ -111,23 +105,4 @@ func splitAllowedIPs(s string) []string {
 		}
 	}
 	return out
-}
-
-func validateUint16RangeText(s string) error {
-	parts := strings.Split(s, "-")
-	if len(parts) != 2 {
-		return fmt.Errorf("expected min-max")
-	}
-	lo, err := strconv.ParseUint(parts[0], 10, 16)
-	if err != nil {
-		return fmt.Errorf("invalid min: %w", err)
-	}
-	hi, err := strconv.ParseUint(parts[1], 10, 16)
-	if err != nil {
-		return fmt.Errorf("invalid max: %w", err)
-	}
-	if lo > hi {
-		return fmt.Errorf("min %d > max %d", lo, hi)
-	}
-	return nil
 }

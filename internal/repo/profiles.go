@@ -23,24 +23,10 @@ rekey_timeout_min, rekey_timeout_max,
 reject_after_time_min, reject_after_time_max,
 keepalive_timeout_min, keepalive_timeout_max,
 max_handshake_attempts_min, max_handshake_attempts_max,
-persistent_keepalive_min, persistent_keepalive_max,
 random_trailers, disable_cookies, created_at`
 
 // Insert persists a profile after server-side validation.
 func (r *Profiles) Insert(ctx context.Context, p domain.ProtocolProfile) (*domain.ProtocolProfile, error) {
-	return insertProfile(ctx, r.DB.Pool, p)
-}
-
-// InsertTx persists a profile inside an existing transaction.
-func (r *Profiles) InsertTx(ctx context.Context, tx pgx.Tx, p domain.ProtocolProfile) (*domain.ProtocolProfile, error) {
-	return insertProfile(ctx, tx, p)
-}
-
-type profileRowQuerier interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
-
-func insertProfile(ctx context.Context, qx profileRowQuerier, p domain.ProtocolProfile) (*domain.ProtocolProfile, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -51,7 +37,6 @@ func insertProfile(ctx context.Context, qx profileRowQuerier, p domain.ProtocolP
 	rjMin, rjMax := rangeDB(p.IsV31(), p.RejectAfterTime)
 	kaMin, kaMax := rangeDB(p.IsV31(), p.KeepaliveTimeout)
 	mhMin, mhMax := rangeDB(p.IsV31(), p.MaxHandshakeAttempts)
-	pkMin, pkMax := rangeDB(p.IsV31(), p.PersistentKeepalive)
 
 	q := `
 INSERT INTO protocol_profiles(
@@ -65,23 +50,22 @@ INSERT INTO protocol_profiles(
     reject_after_time_min, reject_after_time_max,
     keepalive_timeout_min, keepalive_timeout_max,
     max_handshake_attempts_min, max_handshake_attempts_max,
-    persistent_keepalive_min, persistent_keepalive_max,
     random_trailers, disable_cookies
 ) VALUES (
     $1,$2,$3,$4,$5,$6,$7,$8,$9,
     $10,$11,$12,$13,$14,$15,$16,$17,
     $18,$19,$20,$21,$22,$23,
-    $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40
+    $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
 )
 RETURNING ` + profileReturningColumns
 
-	row := qx.QueryRow(ctx, q,
+	row := r.DB.Pool.QueryRow(ctx, q,
 		p.Name, string(p.ProtocolVersion), p.Jc, p.Jmin, p.Jmax, p.S1, p.S2, p.S3, p.S4,
 		p.H1.Min, p.H1.Max, p.H2.Min, p.H2.Max, p.H3.Min, p.H3.Max, p.H4.Min, p.H4.Max,
 		nullable(p.I1), nullable(p.I2), nullable(p.I3), nullable(p.I4), nullable(p.I5),
 		p.ListenPortPolicy,
 		nullableWhen(p.IsV31(), p.HeaderProtectionKey),
-		cpMin, cpMax, raMin, raMax, rtMin, rtMax, rjMin, rjMax, kaMin, kaMax, mhMin, mhMax, pkMin, pkMax,
+		cpMin, cpMax, raMin, raMax, rtMin, rtMax, rjMin, rjMax, kaMin, kaMax, mhMin, mhMax,
 		boolWhen(p.IsV31(), p.RandomTrailers), boolWhen(p.IsV31(), p.DisableCookies),
 	)
 	return scanProfile(row)
@@ -105,7 +89,7 @@ func scanProfile(row pgx.Row) (*domain.ProtocolProfile, error) {
 	var i1, i2, i3, i4, i5 *string
 	var headerProtectionKey *string
 	var cpMin, cpMax, raMin, raMax, rtMin, rtMax *int32
-	var rjMin, rjMax, kaMin, kaMax, mhMin, mhMax, pkMin, pkMax *int32
+	var rjMin, rjMax, kaMin, kaMax, mhMin, mhMax *int32
 	var randomTrailers, disableCookies *bool
 
 	if err := row.Scan(
@@ -114,7 +98,7 @@ func scanProfile(row pgx.Row) (*domain.ProtocolProfile, error) {
 		&i1, &i2, &i3, &i4, &i5, &out.ListenPortPolicy,
 		&headerProtectionKey,
 		&cpMin, &cpMax, &raMin, &raMax, &rtMin, &rtMax,
-		&rjMin, &rjMax, &kaMin, &kaMax, &mhMin, &mhMax, &pkMin, &pkMax,
+		&rjMin, &rjMax, &kaMin, &kaMax, &mhMin, &mhMax,
 		&randomTrailers, &disableCookies, &out.CreatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -132,7 +116,6 @@ func scanProfile(row pgx.Row) (*domain.ProtocolProfile, error) {
 	out.RejectAfterTime = rangeFromDB(rjMin, rjMax)
 	out.KeepaliveTimeout = rangeFromDB(kaMin, kaMax)
 	out.MaxHandshakeAttempts = rangeFromDB(mhMin, mhMax)
-	out.PersistentKeepalive = rangeFromDB(pkMin, pkMax)
 	out.RandomTrailers = derefBool(randomTrailers)
 	out.DisableCookies = derefBool(disableCookies)
 	return &out, nil

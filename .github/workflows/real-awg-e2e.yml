@@ -33,16 +33,14 @@ jobs:
           cid="$(docker create "$image")"
           trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           docker cp "$cid:/usr/local/bin/awg" "$out/awg"
-          docker cp "$cid:/usr/local/bin/awg-quick" "$out/awg-quick"
           docker cp "$cid:/usr/local/bin/amneziawg-go" "$out/amneziawg-go"
-          chmod 0755 "$out/awg" "$out/awg-quick" "$out/amneziawg-go"
+          chmod 0755 "$out/awg" "$out/amneziawg-go"
           echo "$out" >> "$GITHUB_PATH"
       - name: Verify pinned AWG runtime
         shell: bash
         run: |
           set -euo pipefail
           command -v awg
-          command -v awg-quick
           command -v amneziawg-go
           awg --version
           amneziawg-go --version

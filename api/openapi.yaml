@@ -207,7 +207,8 @@ components:
       properties:
         external_id:  { type: string, description: client-supplied stable ID }
         display_name: { type: string }
-        node_id:      { type: string, format: uuid, description: target node/interface; its profile is authoritative }
+        node_id:      { type: string, format: uuid, description: target node/interface; mutually exclusive with node_hostname; its profile is authoritative }
+        node_hostname: { type: string, description: stable target node hostname; mutually exclusive with node_id }
         profile_id:   { type: string, format: uuid, description: optional compatibility assertion; when present it must match the node profile }
         profile_name: { type: string, description: optional compatibility assertion; when present it must match the node profile }
         public_key:   { type: string, description: optional client-supplied public key (44-char base64) }
@@ -223,7 +224,7 @@ components:
         allowed_ip:    { type: string }
         public_key:    { type: string }
         private_key:   { type: string, description: present only on first response when the server generated the key }
-        client_config: { type: string, description: one-time secret-bearing client configuration; if public_key was supplied by the caller, PrivateKey is omitted and must be merged locally }
+        client_config: { type: string, description: complete client configuration present only on first response when the server generated the key }
         preshared_key: { type: string, description: present only on the first create response; also embedded in client_config when client_config is present }
         node_id:       { type: string, format: uuid }
         profile_id:    { type: string, format: uuid }
