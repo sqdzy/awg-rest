@@ -75,7 +75,9 @@ jobs:
         run: go test -timeout=300s -tags=e2e ./test/e2e/...
 
   docker-build:
-    name: docker image + real userspace AWG
+    # Preserve the required status-check context from the protected main branch.
+    # This job also executes the real userspace AWG network E2E.
+    name: docker images
     runs-on: ubuntu-24.04
     needs: [lint-unit]
     steps:
