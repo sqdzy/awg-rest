@@ -1,5 +1,5 @@
-// Package render produces AmneziaWG configuration text. It supports both
-// V1 and V2 protocol profiles, and renders interface-side ([Interface] +
+// Package render produces AmneziaWG configuration text. It supports
+// V1, V2, and V3.1 protocol profiles, and renders interface-side ([Interface] +
 // many [Peer] blocks) as well as client-side configs (single [Peer] for
 // the server).
 //
@@ -141,7 +141,9 @@ func Client(args ClientArgs, profile domain.ProtocolProfile) string {
 	}
 	fmt.Fprintf(&b, "AllowedIPs = %s\n", strings.Join(allowed, ", "))
 	fmt.Fprintf(&b, "Endpoint = %s\n", args.ServerEndpoint)
-	if args.Keepalive > 0 {
+	if profile.IsV31() && !profile.PersistentKeepalive.IsZero() {
+		fmt.Fprintf(&b, "PersistentKeepalive = %s\n", profile.PersistentKeepalive.String())
+	} else if args.Keepalive > 0 {
 		fmt.Fprintf(&b, "PersistentKeepalive = %d\n", args.Keepalive)
 	}
 	return b.String()
@@ -169,7 +171,7 @@ func writeProfile(b *strings.Builder, p domain.ProtocolProfile, includeEmptySpec
 	fmt.Fprintf(b, "Jmax = %d\n", p.Jmax)
 	fmt.Fprintf(b, "S1 = %d\n", p.S1)
 	fmt.Fprintf(b, "S2 = %d\n", p.S2)
-	if p.IsV2() {
+	if p.SupportsV2Fields() {
 		fmt.Fprintf(b, "S3 = %d\n", p.S3)
 		fmt.Fprintf(b, "S4 = %d\n", p.S4)
 	}
@@ -177,13 +179,40 @@ func writeProfile(b *strings.Builder, p domain.ProtocolProfile, includeEmptySpec
 	fmt.Fprintf(b, "H2 = %s\n", p.H2.String())
 	fmt.Fprintf(b, "H3 = %s\n", p.H3.String())
 	fmt.Fprintf(b, "H4 = %s\n", p.H4.String())
-	if p.IsV2() {
+	if p.SupportsV2Fields() {
 		writeSpecialJunk(b, "I1", p.I1, includeEmptySpecialJunk)
 		writeSpecialJunk(b, "I2", p.I2, includeEmptySpecialJunk)
 		writeSpecialJunk(b, "I3", p.I3, includeEmptySpecialJunk)
 		writeSpecialJunk(b, "I4", p.I4, includeEmptySpecialJunk)
 		writeSpecialJunk(b, "I5", p.I5, includeEmptySpecialJunk)
 	}
+	if p.IsV31() {
+		if p.HeaderProtectionKey != "" {
+			fmt.Fprintf(b, "HeaderProtectionKey = %s\n", p.HeaderProtectionKey)
+		}
+		writeUint16Range(b, "ContentPaddingAddition", p.ContentPaddingAddition)
+		writeUint16Range(b, "RekeyAfterTime", p.RekeyAfterTime)
+		writeUint16Range(b, "RekeyTimeout", p.RekeyTimeout)
+		writeUint16Range(b, "RejectAfterTime", p.RejectAfterTime)
+		writeUint16Range(b, "KeepaliveTimeout", p.KeepaliveTimeout)
+		writeUint16Range(b, "MaxHandshakeAttempts", p.MaxHandshakeAttempts)
+		fmt.Fprintf(b, "RandomTrailers = %s\n", awgBool(p.RandomTrailers))
+		fmt.Fprintf(b, "DisableCookies = %s\n", awgBool(p.DisableCookies))
+	}
+}
+
+func writeUint16Range(b *strings.Builder, key string, value domain.Uint16Range) {
+	if value.IsZero() {
+		return
+	}
+	fmt.Fprintf(b, "%s = %s\n", key, value.String())
+}
+
+func awgBool(v bool) string {
+	if v {
+		return "on"
+	}
+	return "off"
 }
 
 func writeSpecialJunk(b *strings.Builder, key, value string, includeEmpty bool) {

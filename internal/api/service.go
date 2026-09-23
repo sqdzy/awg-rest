@@ -64,7 +64,7 @@ type CreatePeerResponse struct {
 	AllowedIP    string `json:"allowed_ip"`
 	PublicKey    string `json:"public_key"`
 	PrivateKey   string `json:"private_key,omitempty"`   // only when server-generated; one-time
-	ClientConfig string `json:"client_config,omitempty"` // only when server-generated; one-time
+	ClientConfig string `json:"client_config,omitempty"` // one-time; may omit PrivateKey for client-supplied keys
 	PresharedKey string `json:"preshared_key,omitempty"`
 	NodeID       string `json:"node_id"`
 	ProfileID    string `json:"profile_id"`
@@ -87,28 +87,9 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		return CreatePeerResponse{}, 0, err
 	}
 
-	// Profile resolution.
-	var profile *domain.ProtocolProfile
-	switch {
-	case req.ProfileID != nil:
-		id, err := uuid.Parse(*req.ProfileID)
-		if err != nil {
-			return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "profile_id", Code: "invalid", Message: "must be a UUID"}}
-		}
-		profile, err = s.Profiles.GetByID(ctx, id)
-		if err != nil {
-			return CreatePeerResponse{}, 0, err
-		}
-	case req.ProfileName != nil:
-		profile, err = s.Profiles.GetByName(ctx, *req.ProfileName)
-		if err != nil {
-			return CreatePeerResponse{}, 0, err
-		}
-	default:
-		return CreatePeerResponse{}, 0, domain.ValidationErrors{{Field: "profile_id", Code: "required", Message: "profile_id or profile_name is required"}}
-	}
-
-	// Node resolution.
+	// Node resolution comes first because the node/interface owns the protocol
+	// profile. Per-peer profile selectors are accepted only as compatibility
+	// assertions and must match the node-owned profile.
 	var node *domain.Node
 	if req.NodeID != nil {
 		id, err := uuid.Parse(*req.NodeID)
@@ -124,6 +105,19 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 		if err != nil {
 			return CreatePeerResponse{}, 0, err
 		}
+	}
+	if node.ProfileID == nil {
+		return CreatePeerResponse{}, 0, domain.ValidationErrors{{
+			Field: "node_id", Code: "profile_unassigned",
+			Message: "node has no protocol profile assigned",
+		}}
+	}
+	profile, err := s.Profiles.GetByID(ctx, *node.ProfileID)
+	if err != nil {
+		return CreatePeerResponse{}, 0, err
+	}
+	if err := validateRequestedProfile(*profile, req); err != nil {
+		return CreatePeerResponse{}, 0, err
 	}
 
 	// Validate any client-supplied public key now; key *generation* must
@@ -237,17 +231,15 @@ func (s *Service) CreatePeer(ctx context.Context, tenantSlug, idemKey string, re
 			NodeID:       node.ID.String(),
 			ProfileID:    profile.ID.String(),
 		}
-		if priv != "" {
-			resp.ClientConfig = render.AmneziaClient(render.ClientArgs{
-				ClientPrivateKey: priv,
-				ClientAddress:    []string{peer.AllowedIP.String()},
-				DNS:              s.ClientDNS,
-				ServerPublicKey:  node.ServerPublicKey,
-				ServerEndpoint:   node.PublicEndpoint,
-				PresharedKey:     psk,
-				Keepalive:        25,
-			}, *profile)
-		}
+		resp.ClientConfig = render.AmneziaClient(render.ClientArgs{
+			ClientPrivateKey: priv,
+			ClientAddress:    []string{peer.AllowedIP.String()},
+			DNS:              s.ClientDNS,
+			ServerPublicKey:  node.ServerPublicKey,
+			ServerEndpoint:   node.PublicEndpoint,
+			PresharedKey:     psk,
+			Keepalive:        25,
+		}, *profile)
 		status = http.StatusAccepted
 		// Persist a sanitized response that does NOT include one-time secret
 		// material, so a replay never re-issues client keys.
@@ -407,18 +399,51 @@ func (s *Service) PeerConfiguration(ctx context.Context, tenantSlug, peerID stri
 	if err != nil {
 		return "", err
 	}
-	profile, err := s.Profiles.GetByID(ctx, peer.ProfileID)
+	if node.ProfileID == nil {
+		return "", domain.ValidationErrors{{
+			Field: "node_id", Code: "profile_unassigned",
+			Message: "node has no protocol profile assigned",
+		}}
+	}
+	profile, err := s.Profiles.GetByID(ctx, *node.ProfileID)
 	if err != nil {
 		return "", err
 	}
+	publicProfile := *profile
+	// This endpoint is intentionally a non-secret skeleton. HeaderProtectionKey
+	// is key material just like client private/PSK values; the complete V3.1
+	// config is issued only in the one-time create response.
+	publicProfile.HeaderProtectionKey = ""
 	out := render.AmneziaClient(render.ClientArgs{
 		ClientAddress:   []string{peer.AllowedIP.String()},
 		DNS:             s.ClientDNS,
 		ServerPublicKey: node.ServerPublicKey,
 		ServerEndpoint:  node.PublicEndpoint,
 		Keepalive:       25,
-	}, *profile)
+	}, publicProfile)
 	return out, nil
+}
+
+func validateRequestedProfile(profile domain.ProtocolProfile, req CreatePeerRequest) error {
+	if req.ProfileID != nil {
+		id, err := uuid.Parse(strings.TrimSpace(*req.ProfileID))
+		if err != nil {
+			return domain.ValidationErrors{{Field: "profile_id", Code: "invalid", Message: "must be a UUID"}}
+		}
+		if id != profile.ID {
+			return domain.ValidationErrors{{
+				Field: "profile_id", Code: "node_profile_mismatch",
+				Message: "profile_id must match the selected node profile",
+			}}
+		}
+	}
+	if req.ProfileName != nil && strings.TrimSpace(*req.ProfileName) != profile.Name {
+		return domain.ValidationErrors{{
+			Field: "profile_name", Code: "node_profile_mismatch",
+			Message: "profile_name must match the selected node profile",
+		}}
+	}
+	return nil
 }
 
 // EnsureTenant is a convenience for bootstrapping or tests.

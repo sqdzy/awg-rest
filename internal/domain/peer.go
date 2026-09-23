@@ -20,21 +20,21 @@ const (
 
 // Peer is the desired-state record for a single VPN client.
 type Peer struct {
-	ID         uuid.UUID  `json:"id"`
-	TenantID   uuid.UUID  `json:"tenant_id"`
-	NodeID     uuid.UUID  `json:"node_id"`
-	ProfileID  uuid.UUID  `json:"profile_id"`
-	ExternalID string     `json:"external_id"`
+	ID          uuid.UUID `json:"id"`
+	TenantID    uuid.UUID `json:"tenant_id"`
+	NodeID      uuid.UUID `json:"node_id"`
+	ProfileID   uuid.UUID `json:"profile_id"`
+	ExternalID  string    `json:"external_id"`
 	DisplayName string    `json:"display_name"`
 
-	PublicKey       string     `json:"public_key"`
-	PresharedKeyRef *string    `json:"preshared_key_ref,omitempty"`
+	PublicKey       string  `json:"public_key"`
+	PresharedKeyRef *string `json:"-"`
 
 	AllowedIP netip.Prefix `json:"allowed_ip"` // /32 or /128
 
-	State            PeerState  `json:"state"`
-	DesiredRevision  int64      `json:"desired_revision"`
-	AppliedRevision  int64      `json:"applied_revision"`
+	State           PeerState `json:"state"`
+	DesiredRevision int64     `json:"desired_revision"`
+	AppliedRevision int64     `json:"applied_revision"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -64,6 +64,7 @@ type Tenant struct {
 // Node represents a VPN host that runs an AmneziaWG interface.
 type Node struct {
 	ID              uuid.UUID  `json:"id"`
+	ProfileID       *uuid.UUID `json:"profile_id,omitempty"`
 	Region          string     `json:"region"`
 	Hostname        string     `json:"hostname"`
 	Status          string     `json:"status"`
@@ -89,10 +90,10 @@ type AddressPool struct {
 type OperationKind string
 
 const (
-	OpCreatePeer OperationKind = "peer.create"
-	OpRevokePeer OperationKind = "peer.revoke"
-	OpDeletePeer OperationKind = "peer.delete"
-	OpRotatePeer OperationKind = "peer.rotate"
+	OpCreatePeer    OperationKind = "peer.create"
+	OpRevokePeer    OperationKind = "peer.revoke"
+	OpDeletePeer    OperationKind = "peer.delete"
+	OpRotatePeer    OperationKind = "peer.rotate"
 	OpReconcileNode OperationKind = "node.reconcile"
 )
 
@@ -107,30 +108,30 @@ const (
 )
 
 type Operation struct {
-	ID         uuid.UUID       `json:"id"`
-	TenantID   uuid.UUID       `json:"tenant_id"`
-	PeerID     *uuid.UUID      `json:"peer_id,omitempty"`
-	NodeID     uuid.UUID       `json:"node_id"`
-	Kind       OperationKind   `json:"kind"`
-	Status     OperationStatus `json:"status"`
-	RequestHash string         `json:"-"`
-	ErrorCode   string         `json:"error_code,omitempty"`
-	ErrorMessage string        `json:"error_message,omitempty"`
-	StartedAt   time.Time      `json:"started_at"`
-	FinishedAt  *time.Time     `json:"finished_at,omitempty"`
+	ID           uuid.UUID       `json:"id"`
+	TenantID     uuid.UUID       `json:"tenant_id"`
+	PeerID       *uuid.UUID      `json:"peer_id,omitempty"`
+	NodeID       uuid.UUID       `json:"node_id"`
+	Kind         OperationKind   `json:"kind"`
+	Status       OperationStatus `json:"status"`
+	RequestHash  string          `json:"-"`
+	ErrorCode    string          `json:"error_code,omitempty"`
+	ErrorMessage string          `json:"error_message,omitempty"`
+	StartedAt    time.Time       `json:"started_at"`
+	FinishedAt   *time.Time      `json:"finished_at,omitempty"`
 }
 
 // AuditEvent is an append-only record of a control-plane action.
 type AuditEvent struct {
-	ID            uuid.UUID  `json:"id"`
-	TenantID      uuid.UUID  `json:"tenant_id"`
-	SubjectID     *uuid.UUID `json:"subject_id,omitempty"`
-	Action        string     `json:"action"`
-	TargetType    string     `json:"target_type"`
-	TargetID      string     `json:"target_id"`
-	Before        []byte     `json:"before,omitempty"`
-	After         []byte     `json:"after,omitempty"`
-	RequestID     string     `json:"request_id,omitempty"`
-	IdempotencyKey string    `json:"idempotency_key,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	TenantID       uuid.UUID  `json:"tenant_id"`
+	SubjectID      *uuid.UUID `json:"subject_id,omitempty"`
+	Action         string     `json:"action"`
+	TargetType     string     `json:"target_type"`
+	TargetID       string     `json:"target_id"`
+	Before         []byte     `json:"before,omitempty"`
+	After          []byte     `json:"after,omitempty"`
+	RequestID      string     `json:"request_id,omitempty"`
+	IdempotencyKey string     `json:"idempotency_key,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
 }

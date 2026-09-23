@@ -1,0 +1,14 @@
+# Optional override for a parallel AmneziaWG 3.1 node/interface.
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.v31.yaml up -d
+#
+# Provision the corresponding database node/config explicitly with:
+#   docker compose exec -T awg-rest /awg-api -provision-v31-node
+#
+# Keep the published and internal port equal unless -v31-node-endpoint is
+# supplied with the actual externally translated port.
+services:
+  awg-rest:
+    ports:
+      - "${AWG31_UDP_BIND:-38824}:${AWG31_UDP_PORT:-38824}/udp"

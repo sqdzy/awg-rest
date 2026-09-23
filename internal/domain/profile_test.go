@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -166,4 +167,167 @@ func TestIntRange_String(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "5", IntRange{Min: 5, Max: 5}.String())
 	require.Equal(t, "5-9", IntRange{Min: 5, Max: 9}.String())
+}
+
+func validV31() ProtocolProfile {
+	return ProtocolProfile{
+		Name:            "default-v31",
+		ProtocolVersion: ProtocolV31,
+		Jc:              5, Jmin: 10, Jmax: 50,
+		S1: 12, S2: 12, S3: 12, S4: 12,
+		H1:                     IntRange{Min: 1, Max: 1},
+		H2:                     IntRange{Min: 2, Max: 2},
+		H3:                     IntRange{Min: 3, Max: 3},
+		H4:                     IntRange{Min: 4, Max: 4},
+		I1:                     "<r 2><b 0x00ff>",
+		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+		ContentPaddingAddition: Uint16Range{Min: 10, Max: 100},
+		RekeyAfterTime:         Uint16Range{Min: 100, Max: 120},
+		RekeyTimeout:           Uint16Range{Min: 3, Max: 7},
+		RejectAfterTime:        Uint16Range{Min: 150, Max: 180},
+		KeepaliveTimeout:       Uint16Range{Min: 5, Max: 15},
+		MaxHandshakeAttempts:   Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:    Uint16Range{Min: 25, Max: 35},
+		RandomTrailers:         true,
+		DisableCookies:         true,
+	}
+}
+
+func TestProtocolProfile_ValidateV31_HappyPath(t *testing.T) {
+	t.Parallel()
+	require.NoError(t, validV31().Validate())
+}
+
+func TestProtocolProfile_V31RejectsInvalidHeaderProtectionKey(t *testing.T) {
+	t.Parallel()
+	p := validV31()
+	p.HeaderProtectionKey = "not-a-key"
+	err := p.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "header_protection_key")
+}
+
+func TestProtocolProfile_V31RejectsRandomTrailersWithRangedHandshakeHeaders(t *testing.T) {
+	t.Parallel()
+	p := validV31()
+	p.H2 = IntRange{Min: 20, Max: 30}
+	err := p.Validate()
+	require.Error(t, err)
+	ve, ok := err.(ValidationErrors)
+	require.True(t, ok)
+	var found bool
+	for _, item := range ve {
+		if item.Code == "unsafe_header_range" {
+			found = true
+		}
+	}
+	require.True(t, found, "expected unsafe_header_range validation error")
+}
+
+func TestProtocolProfile_V31AllowsRangedH4WithRandomTrailers(t *testing.T) {
+	t.Parallel()
+	p := validV31()
+	p.H4 = IntRange{Min: 40, Max: 50}
+	require.NoError(t, p.Validate())
+}
+
+func TestProtocolProfile_V2RejectsV31OnlyFields(t *testing.T) {
+	t.Parallel()
+	p := validV2()
+	p.HeaderProtectionKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+	err := p.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "header_protection_key")
+}
+
+func TestUint16Range_StringAndZero(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, "5", (Uint16Range{Min: 5, Max: 5}).String())
+	require.Equal(t, "5-9", (Uint16Range{Min: 5, Max: 9}).String())
+	require.True(t, (Uint16Range{}).IsZero())
+	require.False(t, (Uint16Range{Min: 1, Max: 1}).IsZero())
+}
+
+func TestProtocolProfile_JSONDoesNotExposeHeaderProtectionKey(t *testing.T) {
+	t.Parallel()
+	p := validV31()
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "header_protection_key")
+	require.NotContains(t, string(b), p.HeaderProtectionKey)
+}
+
+func TestProtocolProfile_V31HeaderProtectionRequiresTwelveBytePaddings(t *testing.T) {
+	t.Parallel()
+	for _, field := range []string{"s1", "s2", "s3", "s4"} {
+		t.Run(field, func(t *testing.T) {
+			p := validV31()
+			switch field {
+			case "s1":
+				p.S1 = 11
+			case "s2":
+				p.S2 = 11
+			case "s3":
+				p.S3 = 11
+			case "s4":
+				p.S4 = 11
+			}
+			err := p.Validate()
+			require.Error(t, err)
+			ve, ok := err.(ValidationErrors)
+			require.True(t, ok)
+			var found bool
+			for _, item := range ve {
+				if item.Field == field && item.Code == "header_protection_padding" {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "expected header_protection_padding error for %s", field)
+		})
+	}
+}
+
+func TestProtocolProfile_SpecialJunkValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid supported tags", func(t *testing.T) {
+		p := validV2()
+		p.I1 = "<r 2><rc 4><rd 3><dz 2><b 0x00ff><t><d><ds>"
+		require.NoError(t, p.Validate())
+	})
+
+	for _, tc := range []struct {
+		name string
+		spec string
+	}{
+		{"negative random", "<r -1>"},
+		{"negative chars", "<rc -1>"},
+		{"negative digits", "<rd -1>"},
+		{"negative data size", "<dz -1>"},
+		{"huge allocation", "<r 999999999>"},
+		{"fixed total over cap", "<r 1000><rd 500>"},
+		{"unknown tag", "<wat 1>"},
+		{"invalid hex", "<b 0x0xz1>"},
+		{"missing close", "<r 2"},
+		{"plain text only", "not-an-obfuscation-spec"},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			p := validV2()
+			p.I1 = tc.spec
+			err := p.Validate()
+			require.Error(t, err)
+			ve, ok := err.(ValidationErrors)
+			require.True(t, ok)
+			var found bool
+			for _, item := range ve {
+				if item.Field == "i1" && item.Code == "invalid_obfuscation" {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "expected invalid_obfuscation for %q", tc.spec)
+		})
+	}
 }

@@ -19,5 +19,32 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - name: Build pinned AWG 3.1 userspace runtime for the test
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="awg-rest-real-e2e:${GITHUB_SHA}"
+          out="${RUNNER_TEMP}/awg31-bin"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          docker build             --file deploy/docker/Dockerfile.all-in-one             --tag "$image"             .
+
+          cid="$(docker create "$image")"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/local/bin/awg" "$out/awg"
+          docker cp "$cid:/usr/local/bin/awg-quick" "$out/awg-quick"
+          docker cp "$cid:/usr/local/bin/amneziawg-go" "$out/amneziawg-go"
+          chmod 0755 "$out/awg" "$out/awg-quick" "$out/amneziawg-go"
+          echo "$out" >> "$GITHUB_PATH"
+      - name: Verify pinned AWG runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v awg
+          command -v awg-quick
+          command -v amneziawg-go
+          awg --version
+          amneziawg-go --version
       - name: e2e (real-awg)
-        run: sudo -E env "PATH=$PATH" go test -timeout=600s -tags="e2e linux_awg" ./test/e2e/...
+        run: sudo -E env "PATH=$PATH" go test -timeout=600s -count=1 -tags="e2e linux_awg" ./test/e2e/...

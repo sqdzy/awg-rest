@@ -167,18 +167,17 @@ func (w *Worker) applyNode(ctx context.Context, nodeID uuid.UUID) error {
 		return err
 	}
 
-	// All peers on a node share the same interface (1 interface per node in
-	// the initial deployment model). When the desired set becomes empty (e.g.
-	// the last peer was revoked) we MUST still push an empty configuration so
-	// the runtime drops the stale peer; we therefore look up the profile from
-	// either an active peer or the most recent revoked one.
-	profile, err := w.lookupNodeProfile(ctx, nodeID)
+	// Protocol parameters belong to the node/interface, not to an individual
+	// peer. A node without an assigned profile cannot safely reconcile peers.
+	if node.ProfileID == nil {
+		if len(peers) == 0 {
+			return nil
+		}
+		return fmt.Errorf("node %s has peers but no protocol profile assigned", node.ID)
+	}
+	profile, err := w.Profiles.GetByID(ctx, *node.ProfileID)
 	if err != nil {
 		return err
-	}
-	if profile == nil {
-		// No peer has ever been provisioned on this node — nothing to do.
-		return nil
 	}
 
 	entries := make([]render.PeerEntry, 0, len(peers))
@@ -258,21 +257,6 @@ func isMissingInterfaceError(err error) bool {
 		strings.Contains(msg, "cannot find device") ||
 		strings.Contains(msg, "no such device") ||
 		strings.Contains(msg, "protocol not supported")
-}
-
-// lookupNodeProfile returns the profile associated with the most recently
-// updated peer on the node — including revoked ones — so that we can still
-// render an empty interface config when the last peer is revoked.
-func (w *Worker) lookupNodeProfile(ctx context.Context, nodeID uuid.UUID) (*domain.ProtocolProfile, error) {
-	row := w.DB.Pool.QueryRow(ctx,
-		`SELECT profile_id FROM peers WHERE node_id = $1 ORDER BY updated_at DESC LIMIT 1`,
-		nodeID)
-	var pid uuid.UUID
-	if err := row.Scan(&pid); err != nil {
-		// pgx returns ErrNoRows; surface as nil so applyNode returns clean.
-		return nil, nil
-	}
-	return w.Profiles.GetByID(ctx, pid)
 }
 
 func (w *Worker) persistRuntime(ctx context.Context, desired []domain.Peer, runtime []awg.PeerRuntime) error {

@@ -28,14 +28,15 @@ type PeerSpec struct {
 
 // PeerRuntime is parsed out of `awg show <iface> dump`.
 type PeerRuntime struct {
-	PublicKey     string
-	PresharedKey  string
-	Endpoint      string
-	AllowedIPs    []string
-	LastHandshake time.Time
-	RxBytes       int64
-	TxBytes       int64
-	KeepaliveSecs int
+	PublicKey      string
+	PresharedKey   string
+	Endpoint       string
+	AllowedIPs     []string
+	LastHandshake  time.Time
+	RxBytes        int64
+	TxBytes        int64
+	KeepaliveSecs  int
+	KeepaliveRange string // raw AWG range (e.g. "25-35"); empty for off
 }
 
 // InterfaceRuntime is the interface-level row of `awg show <iface> dump`.

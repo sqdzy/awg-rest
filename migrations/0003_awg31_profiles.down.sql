@@ -1,0 +1,18 @@
+ALTER TABLE protocol_profiles
+    DROP COLUMN IF EXISTS disable_cookies,
+    DROP COLUMN IF EXISTS random_trailers,
+    DROP COLUMN IF EXISTS persistent_keepalive_max,
+    DROP COLUMN IF EXISTS persistent_keepalive_min,
+    DROP COLUMN IF EXISTS max_handshake_attempts_max,
+    DROP COLUMN IF EXISTS max_handshake_attempts_min,
+    DROP COLUMN IF EXISTS keepalive_timeout_max,
+    DROP COLUMN IF EXISTS keepalive_timeout_min,
+    DROP COLUMN IF EXISTS reject_after_time_max,
+    DROP COLUMN IF EXISTS reject_after_time_min,
+    DROP COLUMN IF EXISTS rekey_timeout_max,
+    DROP COLUMN IF EXISTS rekey_timeout_min,
+    DROP COLUMN IF EXISTS rekey_after_time_max,
+    DROP COLUMN IF EXISTS rekey_after_time_min,
+    DROP COLUMN IF EXISTS content_padding_addition_max,
+    DROP COLUMN IF EXISTS content_padding_addition_min,
+    DROP COLUMN IF EXISTS header_protection_key;

@@ -97,7 +97,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	node, err := nodes.Insert(ctx, domain.Node{
-		Region: "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
+		ProfileID: &profile.ID,
+		Region:    "eu", Hostname: "vpn-1.test", PublicEndpoint: "vpn-1.test:585",
 		BasePort: 585, InterfaceName: "awg0",
 		ServerPublicKey: serverKP.PublicKey,
 	})
@@ -278,6 +279,50 @@ func TestE2E_PeerLifecycle(t *testing.T) {
 	require.Equal(t, revokedPeer.DesiredRevision, revokedPeer.AppliedRevision)
 }
 
+func TestE2E_CreatePeerInheritsNodeProfile(t *testing.T) {
+	env := newTestEnv(t)
+	resp := postJSON(t, env.Server.Client(), env.Server.URL+"/v1/tenants/acme/peers",
+		env.bearerForAdmin(t), "inherit-node-profile", map[string]any{
+			"external_id": "inherit-node-profile",
+		})
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	defer resp.Body.Close()
+
+	var created api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	require.Equal(t, env.Profile.ID.String(), created.ProfileID)
+}
+
+func TestE2E_CreatePeerRejectsProfileDifferentFromNode(t *testing.T) {
+	env := newTestEnv(t)
+	other, err := env.Service.Profiles.Insert(context.Background(), domain.ProtocolProfile{
+		Name: "other-v2", ProtocolVersion: domain.ProtocolV2,
+		Jc: 5, Jmin: 10, Jmax: 50, S1: 40, S2: 32,
+		H1: domain.IntRange{Min: 11_000, Max: 12_000},
+		H2: domain.IntRange{Min: 13_000, Max: 14_000},
+		H3: domain.IntRange{Min: 15_000, Max: 16_000},
+		H4: domain.IntRange{Min: 17_000, Max: 18_000},
+	})
+	require.NoError(t, err)
+
+	resp := postJSON(t, env.Server.Client(), env.Server.URL+"/v1/tenants/acme/peers",
+		env.bearerForAdmin(t), "reject-profile-mismatch", map[string]any{
+			"external_id":  "wrong-profile",
+			"profile_name": other.Name,
+		})
+	require.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
+	defer resp.Body.Close()
+
+	var problem map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&problem))
+	require.Equal(t, "validation_failed", problem["code"])
+
+	var count int
+	require.NoError(t, env.DB.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM peers WHERE external_id = 'wrong-profile'`).Scan(&count))
+	require.Zero(t, count)
+}
+
 func TestE2E_TenantIsolation(t *testing.T) {
 	env := newTestEnv(t)
 	client := env.Server.Client()
@@ -316,6 +361,112 @@ func TestE2E_TenantIsolation(t *testing.T) {
 	revoke := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers/"+cr.PeerID+":revoke",
 		otherBearer, "tenant-iso-revoke", map[string]string{"reason": "wrong tenant"})
 	require.Equal(t, http.StatusForbidden, revoke.StatusCode)
+}
+
+func TestE2E_V2AndV31NodesReconcileIndependently(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	client := env.Server.Client()
+	bearer := env.bearerForAdmin(t)
+
+	v2Resp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-v2", map[string]any{"external_id": "dual-v2"})
+	require.Equal(t, http.StatusAccepted, v2Resp.StatusCode)
+	v2Resp.Body.Close()
+	ran, err := env.Worker.RunOnce(ctx)
+	require.NoError(t, err)
+	require.True(t, ran)
+	require.Len(t, env.Executor.Snapshot("awg0"), 1)
+
+	v31, err := env.Service.Profiles.Insert(ctx, domain.ProtocolProfile{
+		Name: "default-v31", ProtocolVersion: domain.ProtocolV31,
+		Jc: 5, Jmin: 10, Jmax: 50,
+		S1: 12, S2: 12, S3: 12, S4: 12,
+		H1:                     domain.IntRange{Min: 1, Max: 1},
+		H2:                     domain.IntRange{Min: 2, Max: 2},
+		H3:                     domain.IntRange{Min: 3, Max: 3},
+		H4:                     domain.IntRange{Min: 4, Max: 4},
+		I1:                     "<r 2><b 0x00ff>",
+		HeaderProtectionKey:    "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+		ContentPaddingAddition: domain.Uint16Range{Min: 10, Max: 100},
+		RekeyAfterTime:         domain.Uint16Range{Min: 100, Max: 120},
+		RekeyTimeout:           domain.Uint16Range{Min: 3, Max: 7},
+		RejectAfterTime:        domain.Uint16Range{Min: 150, Max: 180},
+		KeepaliveTimeout:       domain.Uint16Range{Min: 5, Max: 15},
+		MaxHandshakeAttempts:   domain.Uint16Range{Min: 15, Max: 20},
+		PersistentKeepalive:    domain.Uint16Range{Min: 25, Max: 35},
+		RandomTrailers:         true,
+		DisableCookies:         true,
+		ListenPortPolicy:       "fixed",
+	})
+	require.NoError(t, err)
+
+	v31KP, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	v31Node, err := env.Service.Nodes.Insert(ctx, domain.Node{
+		ProfileID:       &v31.ID,
+		Region:          "eu",
+		Hostname:        "vpn-31.test",
+		PublicEndpoint:  "vpn-31.test:586",
+		BasePort:        586,
+		InterfaceName:   "awg31",
+		ServerPublicKey: v31KP.PublicKey,
+	})
+	require.NoError(t, err)
+	v31CIDR := netip.MustParsePrefix("10.91.0.0/24")
+	_, err = (&repo.Pools{DB: env.DB}).CreatePool(ctx, env.Tenant.ID, v31Node.ID, v31CIDR)
+	require.NoError(t, err)
+	env.Executor.Provision("awg31", v31KP.PrivateKey, v31KP.PublicKey, 586)
+
+	v31Resp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-v31", map[string]any{
+			"external_id": "dual-v31",
+			"node_id":     v31Node.ID.String(),
+		})
+	require.Equal(t, http.StatusAccepted, v31Resp.StatusCode)
+	var created31 api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(v31Resp.Body).Decode(&created31))
+	v31Resp.Body.Close()
+	require.Equal(t, v31.ID.String(), created31.ProfileID)
+	require.Contains(t, created31.ClientConfig, "HeaderProtectionKey = ")
+	require.Contains(t, created31.ClientConfig, "RandomTrailers = on")
+	require.Contains(t, created31.ClientConfig, "DisableCookies = on")
+	require.Contains(t, created31.ClientConfig, "PersistentKeepalive = 25-35")
+
+	externalKP, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	externalResp := postJSON(t, client, env.Server.URL+"/v1/tenants/acme/peers",
+		bearer, "dual-v31-external-key", map[string]any{
+			"external_id": "dual-v31-external-key",
+			"node_id":     v31Node.ID.String(),
+			"public_key":  externalKP.PublicKey,
+		})
+	require.Equal(t, http.StatusAccepted, externalResp.StatusCode)
+	var externalCreated api.CreatePeerResponse
+	require.NoError(t, json.NewDecoder(externalResp.Body).Decode(&externalCreated))
+	externalResp.Body.Close()
+	require.Empty(t, externalCreated.PrivateKey,
+		"server must not invent or return a private key when caller supplied the public key")
+	require.Contains(t, externalCreated.ClientConfig, "HeaderProtectionKey = ")
+	require.Contains(t, externalCreated.ClientConfig, "PresharedKey = "+externalCreated.PresharedKey)
+	require.Contains(t, externalCreated.ClientConfig, "PersistentKeepalive = 25-35")
+	require.NotContains(t, externalCreated.ClientConfig, "PrivateKey =",
+		"one-time config for an external key is a mergeable secret skeleton")
+
+	cfgResp := getJSON(t, client,
+		env.Server.URL+"/v1/tenants/acme/peers/"+created31.PeerID+"/configuration", bearer)
+	require.Equal(t, http.StatusOK, cfgResp.StatusCode)
+	cfgBody := readBody(t, cfgResp)
+	require.NotContains(t, cfgBody, "HeaderProtectionKey",
+		"non-secret configuration endpoint must not return V3.1 header key")
+
+	ran, err = env.Worker.RunOnce(ctx)
+	require.NoError(t, err)
+	require.True(t, ran)
+
+	require.Len(t, env.Executor.Snapshot("awg0"), 1, "V3.1 reconcile must not alter V2 interface")
+	require.Len(t, env.Executor.Snapshot("awg31"), 2,
+		"both V3.1 peers, including the client-owned-key peer, must reconcile onto awg31")
 }
 
 func TestE2E_Auth_Rejects(t *testing.T) {

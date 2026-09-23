@@ -67,8 +67,15 @@ func TestE2E_RemoteAgentPipeline(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, peers, 1)
 	require.Equal(t, cr.PublicKey, peers[0].PublicKey)
-	require.Equal(t, cr.PresharedKey, peers[0].PresharedKey)
+	require.Empty(t, peers[0].PresharedKey, "remote runtime diagnostics must not return preshared keys")
 	require.Zero(t, peers[0].KeepaliveSecs)
+
+	// The remote showconf endpoint is redacted, but the node-agent must preserve
+	// the real interface private key locally before syncconf.
+	localConf, err := env.Executor.ShowConf(context.Background(), env.Node.InterfaceName)
+	require.NoError(t, err)
+	require.Contains(t, localConf, "PrivateKey = ")
+	require.NotContains(t, localConf, "PrivateKey = (redacted)")
 }
 
 // silence unused import for build configurations where this is the only file.

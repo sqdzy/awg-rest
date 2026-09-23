@@ -10,14 +10,14 @@ import (
 
 // Problem implements RFC 9457 problem details for HTTP APIs.
 type Problem struct {
-	Type     string                    `json:"type"`
-	Title    string                    `json:"title"`
-	Status   int                       `json:"status"`
-	Detail   string                    `json:"detail,omitempty"`
-	Instance string                    `json:"instance,omitempty"`
-	Code     string                    `json:"code,omitempty"`
-	Errors   []domain.ValidationError  `json:"errors,omitempty"`
-	Extra    map[string]any            `json:"-"`
+	Type     string                   `json:"type"`
+	Title    string                   `json:"title"`
+	Status   int                      `json:"status"`
+	Detail   string                   `json:"detail,omitempty"`
+	Instance string                   `json:"instance,omitempty"`
+	Code     string                   `json:"code,omitempty"`
+	Errors   []domain.ValidationError `json:"errors,omitempty"`
+	Extra    map[string]any           `json:"-"`
 }
 
 // Write encodes the problem with content-type application/problem+json.

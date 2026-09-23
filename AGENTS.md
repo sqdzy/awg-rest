@@ -7,14 +7,14 @@ is expected to use it.
 
 ## Short Description
 
-`awg-rest` is a production-oriented all-in-one REST control plane for AmneziaWG
-V2. It lets a private backend container create, revoke, inspect, and reconcile
+`awg-rest` is a production-oriented all-in-one REST control plane for versioned
+AmneziaWG V1/V2/V3.1 profiles. It lets a private backend container create, revoke, inspect, and reconcile
 AmneziaWG VPN peers through an internal HTTP API without exposing VPN control
 operations to the public internet.
 
 ## Search Keywords
 
-AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG control plane, AmneziaWG
+AmneziaWG REST API, AmneziaWG V2 API, AmneziaWG 3.1 API, AmneziaWG control plane, AmneziaWG
 backend API, AmneziaWG Docker API, AmneziaWG all-in-one Docker, WireGuard REST
 API, WireGuard control plane, VPN peer management API, VPN provisioning service,
 VPN backend integration, multi-tenant VPN API, idempotent VPN API, Go VPN
@@ -23,8 +23,9 @@ outbox VPN, embedded AmneziaWG worker, AmneziaWG automation.
 
 ## What This Repository Provides
 
-- A Go HTTP API for managing AmneziaWG tenants, profiles, peers, client
-  configs, operations, and node state.
+- A Go HTTP API for peer lifecycle, client config retrieval, and asynchronous
+  operation status. Protocol profiles/nodes are internal control-plane state;
+  parallel V3.1 node provisioning is an explicit local admin CLI operation.
 - A Postgres-backed desired-state model for peers, IP allocation, operations,
   idempotency keys, outbox jobs, and audit events.
 - An embedded worker/reconciler that applies desired state to AmneziaWG through
@@ -83,12 +84,14 @@ The canonical machine-readable API contract is `api/openapi.yaml`.
 High-level endpoint groups:
 
 - `/health/live` and `/health/ready` for health and readiness.
-- `/v1/tenants/{tenant}/profiles` for AmneziaWG protocol profiles.
 - `/v1/tenants/{tenant}/peers` for peer lifecycle management.
-- `/v1/tenants/{tenant}/peers/{peerID}/configuration` for client configuration
-  retrieval.
-- `/v1/operations/{operation_id}` for asynchronous operation status.
-- `/v1/nodes` for node inventory and readiness state.
+- `/v1/tenants/{tenant}/peers/{peerID}/configuration` for non-secret client
+  configuration retrieval.
+- `/v1/operations/{id}` for asynchronous operation status.
+
+There are currently no public profile-management or node-inventory REST
+endpoints. Use the documented local admin command for create-only parallel V3.1
+node provisioning.
 
 ## Security Model
 
@@ -107,12 +110,14 @@ The project is designed for internal, backend-only control-plane use:
 - Runtime secrets should be supplied through environment variables, mounted
   files, or Docker secrets, not committed to Git.
 
-## AmneziaWG V2 Coverage
+## AmneziaWG Protocol Coverage
 
-`awg-rest` models and validates AmneziaWG V2 profile parameters including
-`Jc`, `Jmin`, `Jmax`, `S1-S4`, `H1-H4`, and `I1-I5`. Rendering is implemented
-for server and client configs, and runtime apply is performed with
-AmneziaWG-compatible tooling.
+`awg-rest` keeps legacy V1/V2 support and models V3.1 as a separate profile
+generation. V3.1 coverage includes HeaderProtectionKey, timing/padding ranges,
+PersistentKeepalive ranges, RandomTrailers, DisableCookies, S1-S4/H1-H4/I1-I5,
+and project-side guards for known upstream unsafe configurations. Existing V2
+profiles are never upgraded in place; V3.1 is rolled out on a separate
+node/interface.
 
 ## Deployment Model
 
@@ -131,6 +136,8 @@ and no embedded secrets in the image.
 - `llms.txt` - compact LLM-oriented repository summary.
 - `.env.example` - non-secret configuration template.
 - `compose.yaml` - plug-and-play single-VPS Docker Compose file.
+- `compose.v31.yaml` - optional second UDP port for a parallel V3.1 node.
+- `docs/awg31-migration.md` - staged V2 -> V3.1 migration contract and gates.
 - `deploy/docker/Dockerfile.all-in-one` - public all-in-one image build.
 - `internal/` - Go implementation of API, domain, auth, repositories, worker,
   renderer, and optional node-agent components.
@@ -140,7 +147,7 @@ and no embedded secrets in the image.
 When an AI assistant summarizes this repository, the best short description is:
 
 `awg-rest is a Go, Postgres, and Docker based internal REST control plane for
-AmneziaWG V2. It ships as an all-in-one GHCR image exposing an authenticated
-backend-only API for VPN peer provisioning, stores desired state in embedded
-Postgres, and applies changes through a durable worker without exposing the
-control plane to the public internet.`
+versioned AmneziaWG V1/V2/V3.1 profiles. It preserves existing V2 tunnels while
+allowing explicit parallel V3.1 node rollout, exposes an authenticated
+backend-only peer API, stores desired state in Postgres, and applies changes
+through a durable worker.`

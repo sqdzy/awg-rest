@@ -140,7 +140,14 @@ func syncConfHandler(e awg.Executor) http.HandlerFunc {
 			writeProblem(w, 400, "bad_request", err.Error())
 			return
 		}
-		if err := e.SyncConf(r.Context(), iface, string(body)); err != nil {
+		// Keep the interface private key local to the node. The remote control
+		// plane receives only redacted showconf output, so the agent itself must
+		// preserve the real key immediately before applying a desired config.
+		config := string(body)
+		if current, showErr := e.ShowConf(r.Context(), iface); showErr == nil {
+			config = awg.PreserveInterfacePrivateKey(config, current)
+		}
+		if err := e.SyncConf(r.Context(), iface, config); err != nil {
 			writeProblem(w, 500, "syncconf_failed", err.Error())
 			return
 		}
@@ -208,14 +215,17 @@ func dumpHandler(e awg.Executor) http.HandlerFunc {
 		}
 		for _, p := range peers {
 			out.Peers = append(out.Peers, PeerRuntime{
-				PublicKey:     p.PublicKey,
-				PresharedKey:  p.PresharedKey,
-				Endpoint:      p.Endpoint,
-				AllowedIPs:    p.AllowedIPs,
-				LastHandshake: p.LastHandshake,
-				RxBytes:       p.RxBytes,
-				TxBytes:       p.TxBytes,
-				KeepaliveSecs: p.KeepaliveSecs,
+				PublicKey: p.PublicKey,
+				// Preshared keys are runtime secrets and are deliberately
+				// omitted from the diagnostic/control-plane dump response.
+				PresharedKey:   "",
+				Endpoint:       p.Endpoint,
+				AllowedIPs:     p.AllowedIPs,
+				LastHandshake:  p.LastHandshake,
+				RxBytes:        p.RxBytes,
+				TxBytes:        p.TxBytes,
+				KeepaliveSecs:  p.KeepaliveSecs,
+				KeepaliveRange: p.KeepaliveRange,
 			})
 		}
 		writeJSON(w, http.StatusOK, out)
@@ -256,7 +266,7 @@ func isSecretConfigLine(line string) bool {
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(key)) {
-	case "privatekey", "presharedkey":
+	case "privatekey", "presharedkey", "headerprotectionkey":
 		return true
 	default:
 		return false
