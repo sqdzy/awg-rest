@@ -173,6 +173,10 @@ func TestProvisionV31Node_ConcurrentCommandsCannotReuseUDPPort(t *testing.T) {
 	_, statB := os.Stat(filepath.Join(dir, "awg31b.conf"))
 	require.NotEqual(t, statA == nil, statB == nil,
 		"only the winning transaction may retain its local bootstrap file")
-	if statA != nil { require.True(t, os.IsNotExist(statA), "%v", statA) }
-	if statB != nil { require.True(t, os.IsNotExist(statB), "%v", statB) }
+	if statA != nil {
+		require.True(t, os.IsNotExist(statA), "%v", statA)
+	}
+	if statB != nil {
+		require.True(t, os.IsNotExist(statB), "%v", statB)
+	}
 }
